@@ -35,8 +35,8 @@ export default function MetricsCards({
 
   return (
     <Row gutter={[16, 16]}>
-      {/* 大屏(xl+): 5列; 中屏(md-lg): 每行3个; 小屏: 每行2个 */}
-      <Col xs={12} sm={12} md={8} xl={5}>
+      {/* 响应式：小屏2列、中屏3列（每行最多3个）、超大屏5列 */}
+      <Col xs={12} sm={12} md={8} xxl={5}>
         <Card>
           <Statistic title={t('dashboard.servers')} value={hostTotal} prefix={<CloudServerOutlined />} />
           <div style={{ marginTop: 8 }}>
@@ -45,7 +45,7 @@ export default function MetricsCards({
           </div>
         </Card>
       </Col>
-      <Col xs={12} sm={12} md={8} xl={5}>
+      <Col xs={12} sm={12} md={8} xxl={5}>
         <Card>
           <Statistic title={t('dashboard.services')} value={svcTotal} prefix={<ApiOutlined />} />
           <div style={{ marginTop: 8 }}>
@@ -54,7 +54,7 @@ export default function MetricsCards({
           </div>
         </Card>
       </Col>
-      <Col xs={12} sm={12} md={8} xl={5}>
+      <Col xs={12} sm={12} md={8} xxl={5}>
         <Card>
           <Statistic title={t('dashboard.databases')} value={dbItems.length} prefix={<DatabaseOutlined />} />
           <div style={{ marginTop: 8 }}>
@@ -63,7 +63,7 @@ export default function MetricsCards({
           </div>
         </Card>
       </Col>
-      <Col xs={12} sm={12} md={12} xl={5}>
+      <Col xs={12} sm={12} md={12} xxl={5}>
         <Card>
           <Statistic 
             title={t('dashboard.activeAlerts')} 
@@ -73,7 +73,7 @@ export default function MetricsCards({
           />
         </Card>
       </Col>
-      <Col xs={24} sm={12} md={12} xl={4}>
+      <Col xs={24} sm={12} md={12} xxl={4}>
         <Card style={{ textAlign: 'center' }}>
           <Text type="secondary" style={{ fontSize: 14 }}>{t('dashboard.healthScore')}</Text>
           <div style={{ marginTop: 8 }}>
