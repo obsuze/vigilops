@@ -17,12 +17,13 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.alert import Alert
+from app.models.remediation_log import RemediationLog
 from app.models.user import User
 from app.schemas.alert import AlertResponse
 from app.services.audit import log_audit
@@ -84,8 +85,28 @@ async def list_alerts(
     result = await db.execute(q)
     alerts = result.scalars().all()
 
+    # 批量获取修复状态（子查询：每条告警取最新的修复记录状态）
+    alert_ids = [a.id for a in alerts]
+    remediation_map: dict = {}
+    if alert_ids:
+        rem_q = (
+            select(RemediationLog.alert_id, RemediationLog.status)
+            .where(RemediationLog.alert_id.in_(alert_ids))
+            .order_by(RemediationLog.alert_id, RemediationLog.started_at.desc())
+        )
+        rem_result = await db.execute(rem_q)
+        for row in rem_result.all():
+            if row.alert_id not in remediation_map:
+                remediation_map[row.alert_id] = row.status
+
+    items = []
+    for a in alerts:
+        data = AlertResponse.model_validate(a).model_dump(mode="json")
+        data["remediation_status"] = remediation_map.get(a.id)
+        items.append(data)
+
     return {
-        "items": [AlertResponse.model_validate(a).model_dump(mode="json") for a in alerts],
+        "items": items,
         "total": total,
         "page": page,
         "page_size": page_size,

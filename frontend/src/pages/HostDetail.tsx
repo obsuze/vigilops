@@ -111,8 +111,8 @@ export default function HostDetail() {
     xAxis: { type: 'category' as const, data: timestamps, axisLabel: { rotate: 30 } },
     yAxis: { type: 'value' as const, axisLabel: { formatter: '{value} KB/s' } },
     series: [
-      { name: '上传', type: 'line' as const, data: metrics.map(m => m.net_send_rate_kb ?? 0), smooth: true, areaStyle: { opacity: 0.1 }, itemStyle: { color: '#1677ff' } },
-      { name: '下载', type: 'line' as const, data: metrics.map(m => m.net_recv_rate_kb ?? 0), smooth: true, areaStyle: { opacity: 0.1 }, itemStyle: { color: '#52c41a' } },
+      { name: '上传', type: 'line' as const, data: metrics.map(m => Math.max(0, m.net_send_rate_kb ?? 0)), smooth: true, areaStyle: { opacity: 0.1 }, itemStyle: { color: '#1677ff' } },
+      { name: '下载', type: 'line' as const, data: metrics.map(m => Math.max(0, m.net_recv_rate_kb ?? 0)), smooth: true, areaStyle: { opacity: 0.1 }, itemStyle: { color: '#52c41a' } },
     ],
     grid: { top: 40, bottom: 60, left: 60, right: 20 },
   };

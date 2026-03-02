@@ -104,5 +104,6 @@ class AlertResponse(BaseModel):
     acknowledged_at: Optional[datetime]
     acknowledged_by: Optional[int]
     created_at: datetime
+    remediation_status: Optional[str] = None  # 关联修复状态（来自 remediation_logs 表）
 
     model_config = {"from_attributes": True}

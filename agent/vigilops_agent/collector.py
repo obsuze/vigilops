@@ -70,8 +70,8 @@ def collect_metrics() -> dict:
     if _prev_net is not None and _prev_time is not None:
         dt = now - _prev_time
         if dt > 0:
-            net_send_rate_kb = round((net.bytes_sent - _prev_net["bytes_sent"]) / 1024 / dt, 2)
-            net_recv_rate_kb = round((net.bytes_recv - _prev_net["bytes_recv"]) / 1024 / dt, 2)
+            net_send_rate_kb = round(max(0.0, (net.bytes_sent - _prev_net["bytes_sent"]) / 1024 / dt), 2)
+            net_recv_rate_kb = round(max(0.0, (net.bytes_recv - _prev_net["bytes_recv"]) / 1024 / dt), 2)
 
     # 丢包率：丢弃包数 / 总包数（百分比）
     total_in = net.packets_recv + net.dropin
