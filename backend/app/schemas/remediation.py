@@ -11,7 +11,9 @@ class RemediationLogResponse(BaseModel):
     """修复日志响应体。"""
     id: int
     alert_id: int
+    alert_name: Optional[str] = None
     host_id: Optional[int]
+    host: Optional[str] = None
     status: str
     risk_level: Optional[str]
     runbook_name: Optional[str]

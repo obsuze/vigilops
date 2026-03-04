@@ -11,7 +11,7 @@ export interface Remediation {
   alert_name: string;
   host: string;
   status: 'pending' | 'approved' | 'executing' | 'success' | 'failed' | 'rejected';
-  runbook: string;
+  runbook_name: string;
   risk_level: 'low' | 'medium' | 'high' | 'critical';
   diagnosis: string;
   commands: RemediationCommand[];

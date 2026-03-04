@@ -89,7 +89,7 @@ export default function RemediationDetail() {
           <Descriptions.Item label="主机">{data.host}</Descriptions.Item>
           <Descriptions.Item label="状态"><RemediationStatusTag status={data.status} /></Descriptions.Item>
           <Descriptions.Item label="风险级别"><RiskLevelTag level={data.risk_level} /></Descriptions.Item>
-          <Descriptions.Item label="Runbook">{data.runbook}</Descriptions.Item>
+          <Descriptions.Item label="Runbook">{data.runbook_name}</Descriptions.Item>
           <Descriptions.Item label="创建时间">{new Date(data.created_at).toLocaleString()}</Descriptions.Item>
           {data.approved_by && (
             <Descriptions.Item label="审批人">{data.approved_by}</Descriptions.Item>

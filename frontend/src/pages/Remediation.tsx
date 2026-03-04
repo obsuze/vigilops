@@ -60,7 +60,7 @@ export default function RemediationList() {
       title: '状态', dataIndex: 'status', width: 100,
       render: (s: string) => <RemediationStatusTag status={s} />,
     },
-    { title: 'Runbook', dataIndex: 'runbook', ellipsis: true },
+    { title: 'Runbook', dataIndex: 'runbook_name', ellipsis: true },
     {
       title: '风险级别', dataIndex: 'risk_level', width: 100,
       render: (l: string) => <RiskLevelTag level={l} />,

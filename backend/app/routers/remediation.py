@@ -40,7 +40,7 @@ router = APIRouter(prefix="/api/v1/remediations", tags=["remediations"])
 @router.get("", response_model=dict)
 async def list_remediations(
     status: Optional[str] = None,
-    host_id: Optional[int] = None,
+    host: Optional[str] = None,
     triggered_by: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -48,28 +48,45 @@ async def list_remediations(
     _user: User = Depends(get_current_user),
 ):
     """获取修复日志列表，支持按状态、主机和触发方式筛选，分页返回。"""
-    q = select(RemediationLog)
-    count_q = select(func.count(RemediationLog.id))
+    base_q = (
+        select(RemediationLog, Alert.title.label("alert_name"), Host.hostname.label("host_name"))
+        .outerjoin(Alert, RemediationLog.alert_id == Alert.id)
+        .outerjoin(Host, RemediationLog.host_id == Host.id)
+    )
+    count_q = (
+        select(func.count())
+        .select_from(RemediationLog)
+        .outerjoin(Alert, RemediationLog.alert_id == Alert.id)
+        .outerjoin(Host, RemediationLog.host_id == Host.id)
+    )
 
     filters = []
     if status:
         filters.append(RemediationLog.status == status)
-    if host_id:
-        filters.append(RemediationLog.host_id == host_id)
+    if host:
+        filters.append(Host.hostname == host)
     if triggered_by:
         filters.append(RemediationLog.triggered_by == triggered_by)
 
     if filters:
-        q = q.where(and_(*filters))
+        base_q = base_q.where(and_(*filters))
         count_q = count_q.where(and_(*filters))
 
     total = (await db.execute(count_q)).scalar()
-    q = q.order_by(RemediationLog.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(q)
-    logs = result.scalars().all()
+    base_q = base_q.order_by(RemediationLog.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(base_q)
+    rows = result.all()
+
+    items = []
+    for row in rows:
+        log, alert_name, host_name = row[0], row[1], row[2]
+        data = RemediationLogResponse.model_validate(log).model_dump(mode="json")
+        data["alert_name"] = alert_name
+        data["host"] = host_name
+        items.append(data)
 
     return {
-        "items": [RemediationLogResponse.model_validate(r).model_dump(mode="json") for r in logs],
+        "items": items,
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -135,11 +152,20 @@ async def get_remediation(
     _user: User = Depends(get_current_user),
 ):
     """根据 ID 获取单条修复日志详情。"""
-    result = await db.execute(select(RemediationLog).where(RemediationLog.id == remediation_id))
-    log = result.scalar_one_or_none()
-    if not log:
+    result = await db.execute(
+        select(RemediationLog, Alert.title.label("alert_name"), Host.hostname.label("host_name"))
+        .outerjoin(Alert, RemediationLog.alert_id == Alert.id)
+        .outerjoin(Host, RemediationLog.host_id == Host.id)
+        .where(RemediationLog.id == remediation_id)
+    )
+    row = result.first()
+    if not row:
         raise HTTPException(status_code=404, detail="Remediation log not found")
-    return log
+    log, alert_name, host_name = row[0], row[1], row[2]
+    data = RemediationLogResponse.model_validate(log).model_dump(mode="json")
+    data["alert_name"] = alert_name
+    data["host"] = host_name
+    return data
 
 
 @router.post("/{remediation_id}/approve", response_model=RemediationLogResponse)
