@@ -4,6 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import PageBreadcrumb from '../components/PageBreadcrumb';
 import { Card, Descriptions, Tag, Spin, Typography, Table, Row, Col } from 'antd';
 import ReactECharts from '../components/ThemedECharts';
 import { serviceService } from '../services/services';
@@ -118,6 +119,7 @@ export default function ServiceDetail() {
 
   return (
     <div>
+      <PageBreadcrumb items={[{ label: '服务监控', path: '/services' }, { label: service.name }]} />
       <Typography.Title level={4}>{service.name}</Typography.Title>
 
       {/* 服务基本信息展示卡片 (Service basic information card) */}

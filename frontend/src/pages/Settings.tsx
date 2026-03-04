@@ -6,7 +6,8 @@
  * 2. Agent Token 管理 - 管理用于 Agent 接入的 API Token，支持创建和吊销
  */
 import { useEffect, useState } from 'react';
-import { Card, Form, InputNumber, Button, Typography, Spin, message, Tabs, Table, Tag, Space, Modal, Input, Tooltip } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { Card, Form, InputNumber, Button, Typography, Spin, message, notification, Tabs, Table, Tag, Space, Modal, Input, Tooltip } from 'antd';
 import { PlusOutlined, ExclamationCircleOutlined, CopyOutlined, CheckOutlined } from '@ant-design/icons';
 import api from '../services/api';
 import PageHeader from '../components/PageHeader';
@@ -27,6 +28,7 @@ interface AgentToken {
  * 系统设置页面组件
  */
 export default function Settings() {
+  const navigate = useNavigate();
   /** 系统配置项：key → { value, description } */
   const [settings, setSettings] = useState<Record<string, { value: string; description: string }>>({});
   const [loading, setLoading] = useState(true);
@@ -113,11 +115,19 @@ export default function Settings() {
   const handleCreateToken = async () => {
     if (!newTokenName.trim()) return;
     try {
-      await api.post('/agent-tokens', { name: newTokenName });
+      const { data } = await api.post('/agent-tokens', { name: newTokenName });
       messageApi.success('Token 已创建');
       setTokenModalOpen(false);
       setNewTokenName('');
       fetchTokens();
+      const tokenId = data?.id || newTokenName;
+      notification.info({
+        key: `guide-alert-${tokenId}`,
+        message: '主机添加成功',
+        description: '建议为该主机配置告警规则，及时发现异常',
+        btn: <Button size='small' type='primary' onClick={() => navigate('/alerts?tab=rules')}>立即配置</Button>,
+        duration: 8,
+      });
     } catch { messageApi.error('创建失败'); }
   };
 

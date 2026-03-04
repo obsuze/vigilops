@@ -18,6 +18,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import PageBreadcrumb from '../components/PageBreadcrumb';
 import { Card, Typography, Descriptions, Button, Space, Spin, message, Modal, Timeline, Tag } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -76,6 +77,7 @@ export default function RemediationDetail() {
   return (
     <div>
       {contextHolder}
+      <PageBreadcrumb items={[{ label: '自动修复', path: '/remediations' }, { label: '修复详情' }]} />
       <Space style={{ marginBottom: 16 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/remediations')}>返回列表</Button>
       </Space>

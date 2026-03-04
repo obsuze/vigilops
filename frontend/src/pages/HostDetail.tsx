@@ -5,6 +5,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import PageBreadcrumb from '../components/PageBreadcrumb';
 import { Card, Row, Col, Descriptions, Tag, Spin, Typography, Select, Space } from 'antd';
 import ReactECharts from '../components/ThemedECharts';
 import { hostService } from '../services/hosts';
@@ -140,6 +141,7 @@ export default function HostDetail() {
 
   return (
     <div>
+      <PageBreadcrumb items={[{ label: '服务器', path: '/hosts' }, { label: host.hostname }]} />
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
         <Col><Typography.Title level={4} style={{ margin: 0 }}>{host.hostname}</Typography.Title></Col>
         <Col>
