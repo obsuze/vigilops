@@ -6,9 +6,9 @@
  * 2. 告警规则 - 管理告警规则（指标告警、日志关键字告警、数据库告警），支持增删改及静默时段设置
  * 支持移动端响应式显示
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 // import { useNavigate } from 'react-router-dom';
-import { Table, Card, Tag, Typography, Select, Space, Button, Drawer, Descriptions, Tabs, Modal, Form, Input, InputNumber, Switch, Row, Col, message, TimePicker, Spin, Empty } from 'antd';
+import { Table, Card, Tag, Typography, Select, Space, Button, Drawer, Descriptions, Tabs, Modal, Form, Input, InputNumber, Switch, Row, Col, message, TimePicker, Spin, Empty, Collapse } from 'antd';
 import { ExclamationCircleOutlined, RobotOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import api from '../services/api';
@@ -19,6 +19,7 @@ import type { Alert, AlertRule } from '../services/alerts';
 import { RemediationStatusTag } from '../components/RemediationBadge';
 import { ErrorState } from '../components/StateComponents';
 import NoiseReduction from '../components/NoiseReduction';
+import PageHeader from '../components/PageHeader';
 
 /** 告警严重级别颜色映射 */
 const severityColor: Record<string, string> = { critical: 'red', warning: 'orange', info: 'blue' };
@@ -62,6 +63,14 @@ export default function AlertList() {
   /** AI 根因分析结果 */
   const [rcData, setRcData] = useState<{ root_cause: string; confidence: string; evidence: string[]; recommendations: string[] } | null>(null);
 
+  // ========== Drawer 内嵌 AI 根因分析 ==========
+  /** 已分析的告警缓存：alert_id -> 分析文本 */
+  const aiCacheRef = useRef<Record<string, string>>({});
+  /** Drawer 内 AI 分析加载状态 */
+  const [drawerAiLoading, setDrawerAiLoading] = useState(false);
+  /** Drawer 内 AI 分析结果文本 */
+  const [drawerAiResult, setDrawerAiResult] = useState<string | null>(null);
+
   /** 触发 AI 根因分析流程 (Trigger AI root cause analysis)
    * 1. 清空旧分析结果，打开分析弹窗
    * 2. 调用后端 AI 分析接口，传入告警ID
@@ -78,6 +87,28 @@ export default function AlertList() {
       messageApi.error('AI 分析失败');
       setRcModalOpen(false);
     } finally { setRcLoading(false); }
+  };
+
+  /** Drawer 内「立即分析」按钮处理：调用 AI 接口，结果缓存到 ref */
+  const handleDrawerAiAnalyze = async (alertId: string) => {
+    if (aiCacheRef.current[alertId]) {
+      setDrawerAiResult(aiCacheRef.current[alertId]);
+      return;
+    }
+    setDrawerAiLoading(true);
+    setDrawerAiResult(null);
+    try {
+      const { data } = await api.get(`/ai/analyze`, { params: { alert_id: alertId } }).catch(() =>
+        api.get(`/ai/insights`, { params: { alert_id: alertId } })
+      );
+      const text = data?.summary || data?.analysis || data?.root_cause || JSON.stringify(data);
+      aiCacheRef.current[alertId] = text;
+      setDrawerAiResult(text);
+    } catch {
+      setDrawerAiResult('AI 分析暂时不可用，请稍后重试。');
+    } finally {
+      setDrawerAiLoading(false);
+    }
   };
 
   /** 获取告警列表数据 (Fetch alerts list data)
@@ -361,20 +392,55 @@ export default function AlertList() {
       ]} />
 
       {/* 告警详情抽屉 */}
-      <Drawer open={!!selectedAlert} onClose={() => setSelectedAlert(null)} title="告警详情" width={window.innerWidth < 768 ? '100%' : 480}>
+      <Drawer
+        open={!!selectedAlert}
+        onClose={() => { setSelectedAlert(null); setDrawerAiResult(null); }}
+        title="告警详情"
+        width={window.innerWidth < 768 ? '100%' : 480}
+      >
         {selectedAlert && (
-          <Descriptions column={1} bordered size="small">
-            <Descriptions.Item label="标题">{selectedAlert.title}</Descriptions.Item>
-            <Descriptions.Item label="消息">{selectedAlert.message}</Descriptions.Item>
-            <Descriptions.Item label="严重级别"><Tag color={severityColor[selectedAlert.severity]}>{selectedAlert.severity}</Tag></Descriptions.Item>
-            <Descriptions.Item label="状态"><Tag color={statusColor[selectedAlert.status]}>{selectedAlert.status}</Tag></Descriptions.Item>
-            <Descriptions.Item label="触发时间">{new Date(selectedAlert.fired_at).toLocaleString()}</Descriptions.Item>
-            <Descriptions.Item label="恢复时间">{selectedAlert.resolved_at ? new Date(selectedAlert.resolved_at).toLocaleString() : '-'}</Descriptions.Item>
-            <Descriptions.Item label="确认时间">{selectedAlert.acknowledged_at ? new Date(selectedAlert.acknowledged_at).toLocaleString() : '-'}</Descriptions.Item>
-          </Descriptions>
-        )}
-        {selectedAlert?.status === 'firing' && (
-          <Button type="primary" style={{ marginTop: 16 }} onClick={() => handleAck(selectedAlert.id)}>确认告警</Button>
+          <>
+            <Descriptions column={1} bordered size="small">
+              <Descriptions.Item label="标题">{selectedAlert.title}</Descriptions.Item>
+              <Descriptions.Item label="消息">{selectedAlert.message}</Descriptions.Item>
+              <Descriptions.Item label="严重级别"><Tag color={severityColor[selectedAlert.severity]}>{selectedAlert.severity}</Tag></Descriptions.Item>
+              <Descriptions.Item label="状态"><Tag color={statusColor[selectedAlert.status]}>{selectedAlert.status}</Tag></Descriptions.Item>
+              <Descriptions.Item label="触发时间">{new Date(selectedAlert.fired_at).toLocaleString()}</Descriptions.Item>
+              <Descriptions.Item label="恢复时间">{selectedAlert.resolved_at ? new Date(selectedAlert.resolved_at).toLocaleString() : '-'}</Descriptions.Item>
+              <Descriptions.Item label="确认时间">{selectedAlert.acknowledged_at ? new Date(selectedAlert.acknowledged_at).toLocaleString() : '-'}</Descriptions.Item>
+            </Descriptions>
+            {selectedAlert.status === 'firing' && (
+              <Button type="primary" style={{ marginTop: 16 }} onClick={() => handleAck(selectedAlert.id)}>确认告警</Button>
+            )}
+            {/* AI 根因分析区块（默认折叠） */}
+            <Collapse
+              style={{ marginTop: 16 }}
+              items={[{
+                key: 'ai',
+                label: (
+                  <Space>
+                    <span>🤖 AI 根因分析</span>
+                    <Button
+                      size="small"
+                      type="primary"
+                      onClick={e => { e.stopPropagation(); handleDrawerAiAnalyze(selectedAlert.id); }}
+                      loading={drawerAiLoading}
+                      disabled={drawerAiLoading}
+                    >
+                      立即分析
+                    </Button>
+                  </Space>
+                ),
+                children: drawerAiLoading ? (
+                  <div style={{ textAlign: 'center', padding: 24 }}><Spin tip="AI 分析中..." /></div>
+                ) : drawerAiResult ? (
+                  <Typography.Text>{drawerAiResult}</Typography.Text>
+                ) : (
+                  <Typography.Text type="secondary">点击「立即分析」获取 AI 根因分析结果</Typography.Text>
+                ),
+              }]}
+            />
+          </>
         )}
       </Drawer>
 
