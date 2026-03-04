@@ -6,6 +6,7 @@
  * - 右侧面板：依赖关系列表、添加/删除依赖、AI 推荐
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useResponsive } from '../hooks/useResponsive';
 import {
   Typography, Button, Spin, message, Radio, Space, Tag,
   Drawer, List, Select, Card, Divider, Empty, Popconfirm, Tooltip,
@@ -143,6 +144,7 @@ const computePipelinePositions = (nodes: TopoNode[], w: number, h: number) => {
 /* ==================== 组件 ==================== */
 
 export default function Topology() {
+  const { isMobile } = useResponsive();
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
   const [loading, setLoading] = useState(true);
@@ -505,8 +507,8 @@ export default function Topology() {
       ) : (
         <Spin spinning={loading}>
           <div ref={chartRef} style={{
-            width: '100%', height: window.innerWidth < 768 ? '70vh' : 'calc(100vh - 230px)', 
-            minHeight: window.innerWidth < 768 ? 400 : 550,
+            width: '100%', height: isMobile ? '70vh' : 'calc(100vh - 230px)',
+            minHeight: isMobile ? 400 : 550,
             background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0',
           }} />
         </Spin>
@@ -517,7 +519,7 @@ export default function Topology() {
         title="编辑依赖关系"
         open={panelOpen}
         onClose={() => setPanelOpen(false)}
-        width={window.innerWidth < 768 ? '100%' : 500}
+        width={isMobile ? '100%' : 500}
       >
         {/* Tab 切换 */}
         <Radio.Group value={aiTab} onChange={e => setAiTab(e.target.value)} style={{ marginBottom: 16, width: '100%' }}
@@ -611,7 +613,7 @@ export default function Topology() {
           <>
             <Button
               type="primary" icon={<RobotOutlined />} onClick={requestAISuggest}
-              loading={aiLoading} block style={{ marginBottom: 16 }}
+              loading={aiLoading} block style={{ marginBottom: 16, background: '#36cfc9', borderColor: '#36cfc9' }}
             >
               {aiLoading ? 'AI 分析中...' : '开始 AI 分析'}
             </Button>

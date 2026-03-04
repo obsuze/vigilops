@@ -7,6 +7,7 @@
  * 支持移动端响应式显示
  */
 import { useEffect, useState, useRef } from 'react';
+import { useResponsive } from '../hooks/useResponsive';
 // import { useNavigate } from 'react-router-dom';
 import { Table, Card, Tag, Typography, Select, Space, Button, Drawer, Descriptions, Tabs, Modal, Form, Input, InputNumber, Switch, Row, Col, message, TimePicker, Spin, Empty, Collapse } from 'antd';
 import { ExclamationCircleOutlined, RobotOutlined } from '@ant-design/icons';
@@ -30,6 +31,7 @@ const statusColor: Record<string, string> = { firing: 'red', resolved: 'green', 
  * 告警中心页面组件
  */
 export default function AlertList() {
+  const { isMobile } = useResponsive();
   // ========== 告警列表状态 ==========
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [total, setTotal] = useState(0);
@@ -40,9 +42,6 @@ export default function AlertList() {
   const [severityFilter, setSeverityFilter] = useState<string>('');
   /** 当前选中的告警（用于侧边详情抽屉） */
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
-  /** 是否为移动端 */
-  const [isMobile, setIsMobile] = useState(false);
-
   // ========== 告警规则状态 ==========
   const [rules, setRules] = useState<AlertRule[]>([]);
   const [rulesLoading, setRulesLoading] = useState(false);
@@ -151,17 +150,6 @@ export default function AlertList() {
   // 当分页或筛选条件变化时重新获取告警
   useEffect(() => { fetchAlerts(); }, [page, statusFilter, severityFilter]);
 
-  /** 检测屏幕大小变化 */
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
   /** 确认告警 */
   const handleAck = async (id: string) => {
     try {
@@ -221,7 +209,7 @@ export default function AlertList() {
         <Space>
           <Button type="link" size="small" onClick={() => setSelectedAlert(record)}>详情</Button>
           {record.status === 'firing' && <Button type="link" size="small" onClick={() => handleAck(record.id)}>确认</Button>}
-          <Button type="link" size="small" icon={<RobotOutlined />} onClick={() => handleRootCause(record.id)}>AI 分析</Button>
+          <Button type="link" size="small" icon={<RobotOutlined />} onClick={() => handleRootCause(record.id)} style={{ color: '#36cfc9' }}>AI 分析</Button>
         </Space>
       ),
     },
@@ -305,7 +293,7 @@ export default function AlertList() {
   return (
     <div>
       {contextHolder}
-      <Typography.Title level={4}>告警中心</Typography.Title>
+      <PageHeader title="告警中心" />
       <Tabs defaultActiveKey="alerts" onChange={k => { if (k === 'rules') fetchRules(); }} items={[
         {
           key: 'alerts', label: '告警列表',
@@ -396,7 +384,7 @@ export default function AlertList() {
         open={!!selectedAlert}
         onClose={() => { setSelectedAlert(null); setDrawerAiResult(null); }}
         title="告警详情"
-        width={window.innerWidth < 768 ? '100%' : 480}
+        width={isMobile ? '100%' : 480}
       >
         {selectedAlert && (
           <>
@@ -446,7 +434,7 @@ export default function AlertList() {
 
       {/* 告警规则编辑弹窗 */}
       <Modal title={editingRule ? '编辑规则' : '新建规则'} open={ruleModalOpen} onCancel={() => setRuleModalOpen(false)}
-        onOk={() => form.submit()} destroyOnClose width={window.innerWidth < 768 ? '100%' : 560}>
+        onOk={() => form.submit()} destroyOnClose width={isMobile ? '100%' : 560}>
         <Form form={form} layout="vertical" onFinish={handleRuleSave} initialValues={{ rule_type: 'metric' }}>
           <Form.Item name="name" label="规则名称" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="rule_type" label="规则类型" rules={[{ required: true }]}>
