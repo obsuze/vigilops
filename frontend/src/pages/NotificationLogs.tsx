@@ -326,8 +326,8 @@ export default function NotificationLogs() {
 
   return (
     <div style={{ padding: '20px' }}>
-      <Title level={2}>通知日志管理</Title>
-      
+      <PageHeader title="通知日志管理" />
+
       {/* 统计卡片 */}
       {stats && (
         <Row gutter={16} style={{ marginBottom: 20 }}>
