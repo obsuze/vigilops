@@ -8,8 +8,9 @@ Creates database engine and session management based on SQLAlchemy 2.0 async mod
 providing data persistence support for the VigilOps platform. Includes async engine
 creation, session factory configuration, ORM base class definition, and dependency injection functions.
 """
+from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.core.config import settings
 
@@ -19,6 +20,12 @@ engine = create_async_engine(
     settings.database_url, 
     echo=False  # 生产环境关闭 SQL 日志输出 (Disable SQL logging in production)
 )
+
+# 创建同步数据库引擎和会话工厂 (Create Sync Database Engine and Session Factory)
+# 用于需要同步 Session 的服务（如告警去重） (For services requiring sync Session, e.g. alert deduplication)
+_sync_url = settings.database_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+sync_engine = create_engine(_sync_url, echo=False)
+SessionLocal = sessionmaker(bind=sync_engine, expire_on_commit=False)
 
 # 创建异步会话工厂 (Create Async Session Factory)
 # 配置会话不在提交后过期，保持对象状态以便后续访问

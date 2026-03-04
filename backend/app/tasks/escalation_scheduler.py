@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_async_session
+from app.core.database import async_session as get_async_session
 from app.services.escalation_engine import EscalationEngine
 
 logger = logging.getLogger(__name__)

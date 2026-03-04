@@ -16,8 +16,12 @@ Includes application initialization, middleware configuration, route registratio
 - WebSocket 实时数据推送 (Real-time data push via WebSocket)
 - 健康检查和监控 (Health checks and monitoring)
 """
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+
+# 配置应用级别日志 (Configure application-level logging)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -99,26 +103,28 @@ async def lifespan(app: FastAPI):
         await seed_builtin_rules(session)
     
     # 初始化默认数据保留策略设置 (Initialize default data retention policy settings)
+    # DataRetentionService 使用同步 .query()，需要同步 Session
     from app.services.data_retention import DataRetentionService
+    from app.core.database import SessionLocal
     try:
-        async with async_session() as db:
-            retention_service = DataRetentionService(db)
-            # 设置默认保留期（如果设置不存在）
+        sync_db = SessionLocal()
+        try:
+            retention_service = DataRetentionService(sync_db)
             for data_type, default_days in {
                 "host_metrics": 30,
-                "db_metrics": 30, 
+                "db_metrics": 30,
                 "log_entries": 7,
                 "ai_insights": 90,
                 "audit_logs": 365
             }.items():
                 if retention_service.get_retention_days(data_type) == default_days:
-                    # 只有当返回的是默认值时，才设置到数据库中（避免覆盖用户配置）
                     from app.models.setting import Setting
-                    from sqlalchemy import select
-                    result = await db.execute(select(Setting).where(Setting.key == f"retention_days_{data_type}"))
-                    existing = result.scalar_one_or_none()
+                    existing = sync_db.query(Setting).filter(Setting.key == f"retention_days_{data_type}").first()
                     if not existing:
                         retention_service.set_retention_days(data_type, default_days)
+            sync_db.commit()
+        finally:
+            sync_db.close()
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)

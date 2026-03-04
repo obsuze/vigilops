@@ -48,6 +48,8 @@ services:
       timeout: 5s
       retries: 3
     restart: unless-stopped
+    profiles:
+      - clickhouse
 
   # Grafana Loki 日志聚合 (Grafana Loki Log Aggregation) - 可选
   loki:

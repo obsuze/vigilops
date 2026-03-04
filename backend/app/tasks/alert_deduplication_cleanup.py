@@ -11,7 +11,7 @@ import asyncio
 import logging
 from datetime import datetime
 
-from app.core.database import async_session
+from app.core.database import async_session, SessionLocal
 from app.services.alert_deduplication import AlertDeduplicationService
 
 logger = logging.getLogger(__name__)
@@ -52,27 +52,27 @@ async def _perform_cleanup():
     logger.info("Starting alert deduplication cleanup")
     
     start_time = datetime.now()
-    db = None
     
     try:
-        # 获取异步数据库会话
-        async with async_session() as db:
-            # 创建清理服务实例
+        # 使用同步 Session，因为 AlertDeduplicationService 使用同步 ORM API
+        db = SessionLocal()
+        try:
             service = AlertDeduplicationService(db)
-            
-            # 执行清理
             cleanup_stats = service.cleanup_expired_records()
-            
-            # 记录清理结果
-            end_time = datetime.now()
-            duration = (end_time - start_time).total_seconds()
-            
-            logger.info(
-                f"Alert deduplication cleanup completed successfully. "
-                f"Duration: {duration:.2f}s, "
-                f"Cleaned up {cleanup_stats.get('expired_dedup_records', 0)} dedup records, "
-                f"{cleanup_stats.get('expired_alert_groups', 0)} alert groups"
-            )
+            db.commit()
+        finally:
+            db.close()
+        
+        # 记录清理结果
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        
+        logger.info(
+            f"Alert deduplication cleanup completed successfully. "
+            f"Duration: {duration:.2f}s, "
+            f"Cleaned up {cleanup_stats.get('expired_dedup_records', 0)} dedup records, "
+            f"{cleanup_stats.get('expired_alert_groups', 0)} alert groups"
+        )
         
     except Exception as e:
         logger.error(f"Alert deduplication cleanup failed: {e}", exc_info=True)
@@ -90,12 +90,16 @@ async def execute_immediate_deduplication_cleanup() -> dict:
     logger.info("Starting immediate alert deduplication cleanup")
     
     try:
-        async with async_session() as db:
+        db = SessionLocal()
+        try:
             service = AlertDeduplicationService(db)
             cleanup_stats = service.cleanup_expired_records()
-            
-            logger.info(f"Immediate alert deduplication cleanup completed: {cleanup_stats}")
-            return cleanup_stats
+            db.commit()
+        finally:
+            db.close()
+        
+        logger.info(f"Immediate alert deduplication cleanup completed: {cleanup_stats}")
+        return cleanup_stats
         
     except Exception as e:
         logger.error(f"Immediate alert deduplication cleanup failed: {e}", exc_info=True)
