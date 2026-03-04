@@ -18,6 +18,7 @@ import {
 } from '@ant-design/icons';
 import { serviceService } from '../services/services';
 import type { Service } from '../services/services';
+import api from '../services/api';
 
 const { Title, Text } = Typography;
 
@@ -78,6 +79,7 @@ export default function ServiceList() {
   const [, setServices] = useState<ServiceItem[]>([]);
   const [hostGroups, setHostGroups] = useState<HostGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [slaMap, setSlaMap] = useState<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
   /** 全局统计（不受筛选影响） */
@@ -94,10 +96,20 @@ export default function ServiceList() {
       const params: Record<string, unknown> = { page: 1, page_size: 100, group_by_host: true };
       if (statusFilter) params.status = statusFilter;
       if (categoryFilter) params.category = categoryFilter;
-      const { data } = await serviceService.list(params);
+      const [{ data }, slaRes] = await Promise.all([
+        serviceService.list(params),
+        api.get('/sla/status').catch(() => ({ data: [] })),
+      ]);
       setServices(data.items || []);
       setHostGroups(data.host_groups || []);
       if (data.stats) setGlobalStats(data.stats);
+      // 构建 slaMap: service_id -> sla_status
+      const map: Record<string, string> = {};
+      const slaList = Array.isArray(slaRes.data) ? slaRes.data : (slaRes.data?.items || []);
+      for (const item of slaList) {
+        if (item.service_id != null) map[String(item.service_id)] = item.status || item.sla_status || 'no_data';
+      }
+      setSlaMap(map);
     } catch { /* ignore */ } finally { setLoading(false); }
   };
 
@@ -180,6 +192,19 @@ export default function ServiceList() {
       width: 170,
       // 最后检查时间本地化显示
       render: (t: string) => t ? new Date(t).toLocaleString() : '-',
+    },
+    {
+      title: 'SLA',
+      key: 'sla',
+      width: 90,
+      render: (_: unknown, r: ServiceItem) => {
+        const status = slaMap[String(r.id)];
+        if (status === undefined) return <Tag color="default">未配置</Tag>;
+        if (status === 'compliant' || status === 'met') return <Tag color="green">达标</Tag>;
+        if (status === 'non_compliant' || status === 'violated' || status === 'breached') return <Tag color="red">未达标</Tag>;
+        if (status === 'no_data') return <Tag>-</Tag>;
+        return <Tag color="default">未配置</Tag>;
+      },
     },
   ];
 
