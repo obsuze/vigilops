@@ -22,6 +22,7 @@ from typing import Dict, List, Optional, Any, Union
 from fastmcp import FastMCP
 from pydantic import BaseModel
 
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.services.ai_engine import AIEngine
 from app.models.host import Host
@@ -496,9 +497,37 @@ def get_topology(
 
 # Server management functions
 def start_mcp_server(host: str = "127.0.0.1", port: int = 8003):
-    """Start the MCP server"""
+    """Start the MCP server with optional Bearer Token authentication"""
+    import uvicorn
+    from starlette.responses import JSONResponse
+
+    api_key = settings.vigilops_mcp_api_key
     logger.info(f"Starting VigilOps MCP Server on {host}:{port}")
-    mcp_server.run(host=host, port=port)
+
+    if not api_key:
+        logger.warning("VIGILOPS_MCP_API_KEY not set — MCP server running without authentication")
+        mcp_server.run(host=host, port=port)
+        return
+
+    logger.info("Bearer Token auth enabled for MCP server")
+    mcp_app = mcp_server.streamable_http_app()
+
+    class BearerAuthMiddleware:
+        def __init__(self, app):
+            self.app = app
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] == "http":
+                headers = dict(scope.get("headers", []))
+                auth = headers.get(b"authorization", b"").decode("latin-1")
+                token = auth[7:] if auth.startswith("Bearer ") else ""
+                if token != api_key:
+                    response = JSONResponse({"detail": "Unauthorized"}, status_code=401)
+                    await response(scope, receive, send)
+                    return
+            await self.app(scope, receive, send)
+
+    uvicorn.run(BearerAuthMiddleware(mcp_app), host=host, port=port)
 
 
 def stop_mcp_server():

@@ -10,7 +10,7 @@ encryption and JWT for user authentication and session management.
 """
 from datetime import datetime, timedelta, timezone
 
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
@@ -126,5 +126,5 @@ def decode_token(token: str) -> dict | None:
     """
     try:
         return jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-    except JWTError:
+    except jwt.PyJWTError:
         return None

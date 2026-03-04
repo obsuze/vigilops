@@ -111,6 +111,9 @@ class Settings(BaseSettings):
     ldap_bind_dn: str = ""  # 绑定 DN (Bind DN) - 管理员账户，留空使用用户凭证
     ldap_bind_password: str = ""  # 绑定密码 (Bind Password)
 
+    # MCP Server 配置 (MCP Server Configuration)
+    vigilops_mcp_api_key: str = ""  # MCP API Key，留空则禁用认证 (MCP API Key; empty = auth disabled)
+
     # 安全和限流配置 (Security and Rate Limiting Configuration)
     enable_rate_limiting: bool = True  # 是否启用 API 限流 (Enable API Rate Limiting)
     enable_security_headers: bool = True  # 是否启用安全响应头 (Enable Security Headers)
