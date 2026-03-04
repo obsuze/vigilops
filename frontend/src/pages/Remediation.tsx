@@ -54,8 +54,8 @@ export default function RemediationList() {
       title: '时间', dataIndex: 'created_at', width: 180,
       render: (t: string) => new Date(t).toLocaleString(),
     },
-    { title: '告警名', dataIndex: 'alert_name', ellipsis: true },
-    { title: '主机', dataIndex: 'host', width: 160 },
+    { title: '告警名', dataIndex: 'alert_name', ellipsis: true, render: (v: string) => v || '-' },
+    { title: '主机', dataIndex: 'host', width: 160, render: (v: string) => v || '-' },
     {
       title: '状态', dataIndex: 'status', width: 100,
       render: (s: string) => <RemediationStatusTag status={s} />,
