@@ -8,6 +8,7 @@ import { Card, Descriptions, Tag, Spin, Typography, Table, Row, Col } from 'antd
 import ReactECharts from '../components/ThemedECharts';
 import { serviceService } from '../services/services';
 import type { Service, ServiceCheck } from '../services/services';
+import api from '../services/api';
 
 /**
  * 服务详情组件
@@ -18,6 +19,7 @@ export default function ServiceDetail() {
   const [service, setService] = useState<Service | null>(null);
   const [checks, setChecks] = useState<ServiceCheck[]>([]);
   const [loading, setLoading] = useState(true);
+  const [slaInfo, setSlaInfo] = useState<{ target: number; current: number; status: string } | null>(null);
 
   /** 获取服务详情和检查历史 (Fetch service details and check history)
    * 并行请求服务基本信息和最近100条检查记录
@@ -28,14 +30,25 @@ export default function ServiceDetail() {
     const fetch = async () => {
       setLoading(true);
       try {
-        const [sRes, cRes] = await Promise.all([
+        const [sRes, cRes, slaRes] = await Promise.all([
           serviceService.get(id),
           serviceService.getChecks(id, { page_size: 100 }),
+          api.get('/sla/status').catch(() => ({ data: [] })),
         ]);
         setService(sRes.data);
         // 兼容数组和分页对象两种返回格式
         const items = Array.isArray(cRes.data) ? cRes.data : (cRes.data as { items?: ServiceCheck[] }).items || [];
         setChecks(items);
+        // 查找当前服务的 SLA 数据
+        const slaList = Array.isArray(slaRes.data) ? slaRes.data : (slaRes.data?.items || []);
+        const found = slaList.find((s: Record<string, unknown>) => String(s.service_id) === String(id));
+        if (found) {
+          setSlaInfo({
+            target: found.sla_target ?? found.target_percent ?? 99.9,
+            current: found.current_uptime ?? found.uptime_percent ?? found.compliance_rate ?? 0,
+            status: found.status ?? found.sla_status ?? 'no_data',
+          });
+        }
       } catch { /* ignore */ } finally { setLoading(false); }
     };
     fetch();
@@ -118,6 +131,19 @@ export default function ServiceDetail() {
           </Descriptions.Item>
           <Descriptions.Item label="可用率">{service.uptime_percent != null ? `${service.uptime_percent}%` : '-'}</Descriptions.Item>
           <Descriptions.Item label="最后检查">{lastCheckTime}</Descriptions.Item>
+          {slaInfo && (
+            <Descriptions.Item label="SLA 目标">{slaInfo.target}%</Descriptions.Item>
+          )}
+          {slaInfo && (
+            <Descriptions.Item label="当前达标率">
+              <Tag color={slaInfo.current >= slaInfo.target ? 'green' : 'red'}>
+                {Number(slaInfo.current).toFixed(2)}%
+              </Tag>
+              <Tag color={(slaInfo.status === 'compliant' || slaInfo.status === 'met') ? 'green' : slaInfo.status === 'no_data' ? 'default' : 'red'} style={{ marginLeft: 4 }}>
+                {(slaInfo.status === 'compliant' || slaInfo.status === 'met') ? '达标' : slaInfo.status === 'no_data' ? '无数据' : '未达标'}
+              </Tag>
+            </Descriptions.Item>
+          )}
         </Descriptions>
       </Card>
 
