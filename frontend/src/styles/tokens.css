@@ -1,0 +1,13 @@
+:root {
+  --color-danger: #ff4d4f;
+  --color-warning: #faad14;
+  --color-success: #52c41a;
+  --color-info: #1677ff;
+  --color-ai: #36cfc9;
+  --color-text-secondary: rgba(255,255,255,0.45);
+  --color-text-muted: rgba(255,255,255,0.3);
+  --color-bg-base: #141414;
+  --color-bg-card: #1f1f1f;
+  --color-bg-hover: #2a2a2a;
+  --color-border: rgba(255,255,255,0.12);
+}
