@@ -8,6 +8,7 @@
  * 点击日志条目可打开详情抽屉，查看完整消息和前后 5 分钟的上下文日志。
  */
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useResponsive } from '../hooks/useResponsive';
 import {
   Input, Select, DatePicker, Table, Tag, Row, Col, Button, Space, Drawer, Descriptions, Typography, Segmented, Tooltip,
 } from 'antd';
@@ -37,6 +38,7 @@ const LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'];
  * 日志管理页面组件
  */
 export default function Logs() {
+  const { isMobile } = useResponsive();
   // ========== 筛选条件状态 ==========
   const [keyword, setKeyword] = useState('');
   const [hostId, setHostId] = useState<string | undefined>();
@@ -286,7 +288,7 @@ export default function Logs() {
         title="日志详情"
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        width={window.innerWidth < 768 ? '100%' : 640}
+        width={isMobile ? '100%' : 640}
       >
         {selectedLog && (
           <>

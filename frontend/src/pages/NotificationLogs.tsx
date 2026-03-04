@@ -40,6 +40,7 @@ import dayjs from 'dayjs';
 import { notificationService } from '../services/alerts';
 import type { NotificationLog } from '../services/alerts';
 import { EmptyState, ErrorState } from '../components/StateComponents';
+import PageHeader from '../components/PageHeader';
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;

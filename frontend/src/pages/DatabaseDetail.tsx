@@ -5,6 +5,7 @@
  * 支持时间范围切换，每 30 秒自动刷新。
  */
 import { useEffect, useState } from 'react';
+import { useResponsive } from '../hooks/useResponsive';
 import { useParams } from 'react-router-dom';
 import { Card, Row, Col, Descriptions, Tag, Spin, Typography, Select, Space, Table } from 'antd';
 import ReactECharts from '../components/ThemedECharts';
@@ -19,6 +20,7 @@ const statusColor: Record<string, string> = { healthy: 'success', warning: 'warn
  * 通过路由参数 id 获取数据库信息、历史指标和慢查询数据
  */
 export default function DatabaseDetail() {
+  const { isMobile } = useResponsive();
   const { id } = useParams<{ id: string }>();
   const [db, setDb] = useState<DatabaseItem | null>(null);
   const [metrics, setMetrics] = useState<DatabaseMetric[]>([]);
@@ -110,7 +112,7 @@ export default function DatabaseDetail() {
         <Col>
           <Space>
             <Typography.Text type="secondary">时间范围:</Typography.Text>
-            <Select value={timeRange} onChange={setTimeRange} style={{ width: window.innerWidth < 768 ? '100%' : 120 }}
+            <Select value={timeRange} onChange={setTimeRange} style={{ width: isMobile ? '100%' : 120 }}
               options={[
                 { label: '1小时', value: '1h' },
                 { label: '6小时', value: '6h' },

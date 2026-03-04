@@ -7,6 +7,7 @@
  * 3. 升级统计 - 统计图表
  */
 import { useEffect, useState, useCallback } from 'react';
+import { useResponsive } from '../hooks/useResponsive';
 import {
   Card, Table, Button, Modal, Form, Input, InputNumber, Switch, Select,
   Tag, Space, Tabs, message, Popconfirm, DatePicker, Row, Col, Statistic, Typography,
@@ -60,6 +61,7 @@ interface EscalationStats {
 }
 
 export default function AlertEscalation() {
+  const { isMobile } = useResponsive();
   const { t } = useTranslation();
   const [messageApi, contextHolder] = message.useMessage();
 
@@ -377,7 +379,7 @@ export default function AlertEscalation() {
         open={ruleModalOpen}
         onOk={handleRuleSave}
         onCancel={() => setRuleModalOpen(false)}
-        width={window.innerWidth < 768 ? '100%' : 640}
+        width={isMobile ? '100%' : 640}
         destroyOnClose
       >
         <Form form={ruleForm} layout="vertical">

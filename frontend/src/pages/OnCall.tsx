@@ -7,6 +7,7 @@
  * 3. 值班日历 - 日历视图展示排期
  */
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useResponsive } from '../hooks/useResponsive';
 import {
   Card, Table, Button, Modal, Form, Input, Switch, Select, Tag, Space, Tabs,
   message, Popconfirm, DatePicker, Typography, Badge, Calendar,
@@ -73,6 +74,7 @@ interface CoverageData {
 }
 
 export default function OnCall() {
+  const { isMobile } = useResponsive();
   const { t } = useTranslation();
   const [messageApi, contextHolder] = message.useMessage();
 
@@ -406,7 +408,7 @@ export default function OnCall() {
                 extra={
                   <Space>
                     <Select
-                      style={{ width: window.innerWidth < 768 ? '100%' : 160 }}
+                      style={{ width: isMobile ? '100%' : 160 }}
                       placeholder={t('onCall.filterGroup')}
                       allowClear
                       value={filterGroupId}

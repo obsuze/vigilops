@@ -3,6 +3,7 @@
  * 提供通知渠道的增删改查功能，支持 Webhook、邮件、钉钉、飞书、企业微信 五种渠道类型。
  */
 import { useEffect, useState } from 'react';
+import { useResponsive } from '../hooks/useResponsive';
 import { Table, Card, Typography, Button, Modal, Form, Input, InputNumber, Switch, Space, Select, Tag, message } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 import { notificationService } from '../services/alerts';
@@ -106,6 +107,7 @@ function parseConfigToFields(type: string, config: Record<string, unknown>): Rec
  * 通知渠道管理组件
  */
 export default function NotificationChannels() {
+  const { isMobile } = useResponsive();
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -325,7 +327,7 @@ export default function NotificationChannels() {
         onCancel={() => setModalOpen(false)}
         onOk={() => form.submit()}
         destroyOnClose
-        width={window.innerWidth < 768 ? '100%' : 560}
+        width={isMobile ? '100%' : 560}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} initialValues={{ type: 'webhook', smtp_port: 465, smtp_ssl: true }}>
           <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: '请输入名称' }]}>

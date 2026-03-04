@@ -20,6 +20,7 @@ import {
   type Report,
 } from '../services/reports';
 import { EmptyState, ErrorState, PageLoading } from '../components/StateComponents';
+import PageHeader from '../components/PageHeader';
 
 const { Title, Paragraph } = Typography;
 const { RangePicker } = DatePicker;
@@ -235,17 +236,19 @@ export default function Reports() {
   // ========== 列表视图 ==========
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>运维报告</Title>
-        <Space>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => openGenerateModal('daily')}>
-            生成日报
-          </Button>
-          <Button icon={<PlusOutlined />} onClick={() => openGenerateModal('weekly')}>
-            生成周报
-          </Button>
-        </Space>
-      </div>
+      <PageHeader
+        title="运维报告"
+        extra={
+          <Space>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => openGenerateModal('daily')}>
+              生成日报
+            </Button>
+            <Button icon={<PlusOutlined />} onClick={() => openGenerateModal('weekly')}>
+              生成周报
+            </Button>
+          </Space>
+        }
+      />
 
       {loadError ? (
         <ErrorState error={loadError} onRetry={loadReports} />

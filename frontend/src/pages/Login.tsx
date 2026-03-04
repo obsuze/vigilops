@@ -5,6 +5,7 @@
  * 登录或注册成功后将 token 和用户信息存入 localStorage，并跳转到首页。
  */
 import { useState, useEffect } from 'react';
+import { useResponsive } from '../hooks/useResponsive';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, message, Tabs, Row, Col, Space, Modal } from 'antd';
 import { UserOutlined, LockOutlined, MailOutlined, RocketOutlined, RobotOutlined, ThunderboltOutlined, DashboardOutlined, SafetyCertificateOutlined, GlobalOutlined } from '@ant-design/icons';
@@ -67,14 +68,13 @@ export default function Login() {
   const [activeTab, setActiveTab] = useState('login');
   /** 忘记密码弹窗 */
   const [forgotModalOpen, setForgotModalOpen] = useState(false);
-  /** 是否移动端 */
-  const [isMobile, setIsMobile] = useState(false);
   const navigate = useNavigate();
   const [loginForm] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
   const [authProviders, setAuthProviders] = useState<any>(null);
   const [ldapEnabled, setLdapEnabled] = useState(false);
   const { t, i18n } = useTranslation();
+  const { isMobile } = useResponsive();
 
   /** 切换语言 */
   const toggleLanguage = () => {
@@ -82,16 +82,6 @@ export default function Login() {
     i18n.changeLanguage(newLang);
     localStorage.setItem('language', newLang);
   };
-
-  // 监听窗口大小变化
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   // 获取可用认证提供商
   useEffect(() => {

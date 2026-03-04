@@ -6,6 +6,7 @@
  * 支持移动端响应式设计，在小屏幕上使用抽屉式侧边栏。
  */
 import { useState, useEffect } from 'react';
+import { useResponsive } from '../hooks/useResponsive';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Button, theme, Avatar, Dropdown, Drawer } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -144,8 +145,6 @@ export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   /** 移动端抽屉打开状态 */
   const [drawerVisible, setDrawerVisible] = useState(false);
-  /** 是否为移动端 */
-  const [isMobile, setIsMobile] = useState(false);
   /** 菜单展开的 SubMenu keys */
   const [menuOpenKeys, setMenuOpenKeys] = useState<string[]>([]);
   
@@ -154,6 +153,7 @@ export default function AppLayout() {
   const { token: { colorBgContainer, borderRadiusLG, colorBgLayout } } = theme.useToken();
   const { isDark, toggleTheme } = useTheme();
   const { t, i18n } = useTranslation();
+  const { isMobile } = useResponsive();
 
   /** 动态生成菜单 */
   const allMenuItems = buildMenuItems(t);
@@ -164,20 +164,10 @@ export default function AppLayout() {
     localStorage.setItem('language', lang);
   };
 
-  /** 检测屏幕大小变化 */
+  /** 移动端自动折叠侧边栏 */
   useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (mobile) {
-        setCollapsed(true); // 移动端默认折叠侧边栏
-      }
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    if (isMobile) setCollapsed(true);
+  }, [isMobile]);
 
   /** 从 localStorage 读取用户名和角色 */
   const userName = localStorage.getItem('user_name') || 'Admin';

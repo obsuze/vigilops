@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { Card, Form, InputNumber, Button, Typography, Spin, message, Tabs, Table, Tag, Space, Modal, Input, Tooltip } from 'antd';
 import { PlusOutlined, ExclamationCircleOutlined, CopyOutlined, CheckOutlined } from '@ant-design/icons';
 import api from '../services/api';
+import PageHeader from '../components/PageHeader';
 
 /** Agent Token 数据结构 */
 interface AgentToken {
@@ -169,7 +170,7 @@ export default function Settings() {
   return (
     <div>
       {contextHolder}
-      <Typography.Title level={4}>系统设置</Typography.Title>
+      <PageHeader title="系统设置" />
       <Tabs defaultActiveKey="general" onChange={k => { if (k === 'tokens') fetchTokens(); }} items={[
         {
           key: 'general', label: '常规设置',

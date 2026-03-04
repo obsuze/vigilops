@@ -19,8 +19,9 @@ import {
 import { serviceService } from '../services/services';
 import type { Service } from '../services/services';
 import api from '../services/api';
+import PageHeader from '../components/PageHeader';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 /* ==================== 类型定义 ==================== */
 
@@ -261,14 +262,10 @@ export default function ServiceList() {
   return (
     <div>
       {/* 标题 + 统计 */}
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Col>
-          <Space size={16}>
-            <Title level={4} style={{ margin: 0 }}>服务监控</Title>
-            <Tag icon={<DesktopOutlined />} color="default">{hostCount} 台服务器</Tag>
-          </Space>
-        </Col>
-        <Col>
+      <PageHeader
+        title="服务监控"
+        tags={<Tag icon={<DesktopOutlined />} color="default">{hostCount} 台服务器</Tag>}
+        extra={
           <Space size={20}>
             <Statistic title="总服务" value={globalStats.total} valueStyle={{ fontSize: 18 }} />
             <Statistic
@@ -294,8 +291,8 @@ export default function ServiceList() {
               valueStyle={{ fontSize: 18, color: globalStats.unhealthy > 0 ? '#ff4d4f' : '#d9d9d9' }}
             />
           </Space>
-        </Col>
-      </Row>
+        }
+      />
 
       {/* 筛选器 */}
       <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>

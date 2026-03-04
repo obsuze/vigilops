@@ -9,6 +9,7 @@ import { Table, Card, Tag, Input, Select, Row, Col, Progress, Typography, Space,
 import { CloudServerOutlined, AppstoreOutlined, UnorderedListOutlined, PlusOutlined } from '@ant-design/icons';
 import { hostService } from '../services/hosts';
 import type { Host } from '../services/hosts';
+import PageHeader from '../components/PageHeader';
 
 const { Search } = Input;
 
@@ -138,9 +139,9 @@ export default function HostList() {
 
   return (
     <div>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Col><Typography.Title level={4} style={{ margin: 0 }}>服务器列表</Typography.Title></Col>
-        <Col>
+      <PageHeader
+        title="服务器列表"
+        extra={
           <Space>
             {/* 主机名搜索：立即触发查询并重置分页 */}
             <Search placeholder="搜索主机名" onSearch={v => { setSearch(v); setPage(1); }} style={{ width: 200 }} allowClear />
@@ -152,8 +153,8 @@ export default function HostList() {
               { value: 'card', icon: <AppstoreOutlined /> },
             ]} value={viewMode} onChange={v => setViewMode(v as string)} />
           </Space>
-        </Col>
-      </Row>
+        }
+      />
       {!loading && hosts.length === 0 && !search && !statusFilter ? (
         <Card>
           <Empty description="暂无服务器，点击添加">
