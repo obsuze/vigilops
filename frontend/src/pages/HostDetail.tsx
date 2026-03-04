@@ -9,6 +9,7 @@ import { Card, Row, Col, Descriptions, Tag, Spin, Typography, Select, Space } fr
 import ReactECharts from '../components/ThemedECharts';
 import { hostService } from '../services/hosts';
 import type { Host, HostMetrics } from '../services/hosts';
+import api from '../services/api';
 
 /**
  * 主机详情组件
@@ -21,6 +22,8 @@ export default function HostDetail() {
   const [loading, setLoading] = useState(true);
   /** 时间范围选择：1h / 6h / 24h / 7d */
   const [timeRange, setTimeRange] = useState('1h');
+  /** 当前主机的活跃告警列表 */
+  const [alerts, setAlerts] = useState<{ id: string; title: string; severity: string; fired_at: string }[]>([]);
 
   /** 获取主机详情和监控指标 (Fetch host details and metrics)
    * 并行请求主机基本信息和时间范围内的历史指标数据
@@ -30,12 +33,15 @@ export default function HostDetail() {
     if (!id) return;
     setLoading(true);
     try {
-      const [hostRes, metricsRes] = await Promise.all([
+      const [hostRes, metricsRes, alertsRes] = await Promise.all([
         hostService.get(id),
         hostService.getMetrics(id, { range: timeRange }),
+        api.get(`/alerts`, { params: { host_id: id, status: 'firing', page_size: 20 } }).catch(() => ({ data: { items: [] } })),
       ]);
       setHost(hostRes.data);
       setMetrics(Array.isArray(metricsRes.data) ? metricsRes.data : []);
+      const items = alertsRes.data?.items || (Array.isArray(alertsRes.data) ? alertsRes.data : []);
+      setAlerts(items);
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
@@ -168,6 +174,27 @@ export default function HostDetail() {
           </Descriptions.Item>
         </Descriptions>
       </Card>
+
+      {/* 活跃告警卡片 */}
+      {alerts.length > 0 ? (
+        <Card
+          style={{ marginBottom: 16, borderColor: '#ff4d4f', borderWidth: 1.5 }}
+          title={<Typography.Text strong style={{ color: '#ff4d4f' }}>⚠️ 活跃告警（{alerts.length}）</Typography.Text>}
+          size="small"
+        >
+          {alerts.map(a => (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+              <span style={{ flex: 1, fontWeight: 500 }}>{a.title}</span>
+              <Tag color={a.severity === 'critical' ? 'red' : a.severity === 'warning' ? 'orange' : 'blue'}>{a.severity}</Tag>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>{new Date(a.fired_at).toLocaleString()}</Typography.Text>
+            </div>
+          ))}
+        </Card>
+      ) : (
+        <div style={{ marginBottom: 16 }}>
+          <Tag color="success">无活跃告警</Tag>
+        </div>
+      )}
 
       {/* 监控图表网格布局 (Monitoring charts grid layout) */}
       <Row gutter={[16, 16]}>
