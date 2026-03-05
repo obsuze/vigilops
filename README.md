@@ -780,7 +780,7 @@ MCP Server 使用 HTTP 模式（FastMCP + uvicorn）。在 Claude Desktop 配置
 
 - [GitHub Discussions](https://github.com/LinChuang2008/vigilops/discussions) — 提问、建议、交流
 - [报告 Bug](https://github.com/LinChuang2008/vigilops/issues/new)
-- 📧 [support@lchuang.net](mailto:support@lchuang.net)
+- 📧 [lchuangnet@lchuangnet.com](mailto:lchuangnet@lchuangnet.com)
 
 ---
 
