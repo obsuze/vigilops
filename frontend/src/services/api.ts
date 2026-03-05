@@ -9,6 +9,9 @@ const api = axios.create({
   baseURL: '/api/v1',
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
+  // P0-2 骨架：启用 withCredentials，允许浏览器发送 httpOnly cookie
+  // 后端登录接口已同步设置 httpOnly cookie，前端逐步迁移 localStorage → cookie
+  withCredentials: true,
 });
 
 /** 请求拦截器：自动附加 JWT 令牌到请求头 */

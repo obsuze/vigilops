@@ -8,7 +8,9 @@ Provides common dependency injection functions for the VigilOps platform,
 including user authentication and permission checks. Implements user authentication
 and Role-Based Access Control (RBAC) based on JWT tokens.
 """
-from fastapi import Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,23 +20,44 @@ from app.core.security import decode_token
 from app.models.user import User
 
 # Bearer Token 认证方案 (Bearer Token Authentication Scheme)
-security = HTTPBearer()
+# auto_error=False：让我们手动处理错误，以便支持 cookie 回退
+security = HTTPBearer(auto_error=False)
+
+# P0-2 骨架：httpOnly cookie 中的访问令牌 key
+_COOKIE_ACCESS = "access_token"
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """
-    从请求头中提取并验证 JWT，返回当前登录用户 (Extract and validate JWT from request header, return current user)
+    从请求中提取并验证 JWT，返回当前登录用户。
+
+    P0-2 骨架：优先读取 Authorization Bearer header，
+    回退到 httpOnly cookie（access_token），支持平滑迁移。
     
-    解析 Authorization 头中的 Bearer Token，验证 JWT 签名和有效期，
-    从数据库查询用户信息并返回。用于保护需要认证的 API 端点。
-    
-    Parses Bearer Token from Authorization header, validates JWT signature and expiration,
-    queries user information from database and returns it. Used to protect API endpoints that require authentication.
+    Extract and validate JWT from request, return current user.
+    P0-2 Skeleton: prefers Authorization Bearer header, falls back to httpOnly cookie.
     """
-    payload = decode_token(credentials.credentials)
+    token_str: Optional[str] = None
+
+    # 1. 优先使用 Bearer header（现有前端兼容）
+    if credentials is not None:
+        token_str = credentials.credentials
+    else:
+        # 2. 回退：从 httpOnly cookie 读取（P0-2 新增路径）
+        token_str = request.cookies.get(_COOKIE_ACCESS)
+
+    if not token_str:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    payload = decode_token(token_str)
     if payload is None or payload.get("type") != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 

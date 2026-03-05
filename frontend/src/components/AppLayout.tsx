@@ -174,8 +174,17 @@ export default function AppLayout() {
   const userRole = localStorage.getItem('user_role') || 'viewer';
   const menuItems = filterMenuByRole(allMenuItems, userRole);
 
-  /** 退出登录：清除本地存储的认证信息并跳转到登录页 */
-  const handleLogout = () => {
+  /** 退出登录：清除本地存储的认证信息并跳转到登录页
+   * P0-2 骨架：同步调用后端 /auth/logout 清除 httpOnly cookie
+   */
+  const handleLogout = async () => {
+    try {
+      // P0-2 骨架：清除后端 httpOnly cookie（使用 withCredentials）
+      await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
+    } catch {
+      // 即使请求失败也继续本地清理，不阻塞退出流程
+    }
+    // TODO P0-2 完整实现：移除以下 localStorage 操作，改为纯 cookie 模式
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user_name');
