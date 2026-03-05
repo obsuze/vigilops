@@ -6,7 +6,7 @@
 
 [![Stars](https://img.shields.io/github/stars/LinChuang2008/vigilops?style=social)](https://github.com/LinChuang2008/vigilops)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-v0.9.0-blue)](https://github.com/LinChuang2008/vigilops/releases)
+[![Version](https://img.shields.io/badge/version-v0.9.1-blue)](https://github.com/LinChuang2008/vigilops/releases)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://github.com/LinChuang2008/vigilops)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -87,7 +87,7 @@ Open `http://localhost:3001`. That's it.
 ### Prerequisites
 
 - Docker 20+ and Docker Compose v2+
-- 1 GB RAM minimum (2 GB recommended)
+- 4 CPU cores / 8 GB RAM (for first-time build with image compilation; runtime requires ~2 GB)
 - Ports 3001 (frontend) and 8001 (backend) available
 
 ---
@@ -107,8 +107,9 @@ cp backend/.env.example backend/.env
 # 3. Start all services
 docker compose up -d
 
-# 4. Wait for services to be ready (~30s)
-curl http://localhost:8001/health
+# 4. Wait for services to be ready
+# First run takes 15–30 min (image pull + build). Subsequent restarts: <60s.
+until curl -s http://localhost:8001/health > /dev/null; do echo "Waiting..."; sleep 10; done && echo "Ready!"
 
 # 5. Open the frontend
 # http://localhost:3001
@@ -129,7 +130,7 @@ git clone https://github.com/LinChuang2008/vigilops.git /opt/vigilops
 cd /opt/vigilops
 
 # 2. Configure production environment variables
-cp backend/.env.example backend/.env
+cp .env.example .env
 # You MUST change the following values:
 #   POSTGRES_PASSWORD  — use a strong password
 #   JWT_SECRET_KEY     — random string, generate with: openssl rand -hex 32
@@ -336,7 +337,11 @@ For a **remote server**, replace `localhost:8003` with your server's IP or domai
 }
 ```
 
-> ⚠️ The MCP Server currently has no built-in authentication. Bind it to `127.0.0.1` (localhost only) or protect port 8003 with a firewall rule when deployed in production.
+> 🔐 The MCP Server requires Bearer Token authentication. Add the following to your `backend/.env` to set the token:
+> ```env
+> VIGILOPS_MCP_TOKEN=your-secret-token-here
+> ```
+> Then include the token in your MCP client config. Always restrict port 8003 via firewall in production.
 
 ### Available Tools (5 total)
 
@@ -514,7 +519,7 @@ docker compose up -d
 #### 前置要求
 
 - Docker 20+ 及 Docker Compose v2+
-- 最低 1 GB 内存（推荐 2 GB）
+- 4核 CPU / 8 GB 内存（首次构建含镜像编译；运行期约需 2 GB）
 - 端口 3001（前端）和 8001（后端）未被占用
 
 ---
@@ -534,8 +539,9 @@ cp backend/.env.example backend/.env
 # 3. 启动所有服务
 docker compose up -d
 
-# 4. 等待服务就绪（约 30 秒）
-curl http://localhost:8001/health
+# 4. 等待服务就绪
+# 首次启动约 15–30 分钟（含镜像拉取+构建），后续重启 <60 秒
+until curl -s http://localhost:8001/health > /dev/null; do echo "等待中..."; sleep 10; done && echo "就绪！"
 
 # 5. 访问前端
 # http://localhost:3001
@@ -554,7 +560,7 @@ git clone https://github.com/LinChuang2008/vigilops.git /opt/vigilops
 cd /opt/vigilops
 
 # 2. 配置生产环境变量
-cp backend/.env.example backend/.env
+cp .env.example .env
 # 必须修改以下值：
 #   POSTGRES_PASSWORD  — 改为强密码
 #   JWT_SECRET_KEY     — 随机字符串，可用 openssl rand -hex 32 生成
@@ -721,7 +727,11 @@ MCP Server 使用 HTTP 模式（FastMCP + uvicorn）。在 Claude Desktop 配置
 }
 ```
 
-> ⚠️ MCP Server 暂无内置认证。生产环境建议绑定 `127.0.0.1` 或通过防火墙限制 8003 端口的访问来源。
+> 🔐 MCP Server 已内置 Bearer Token 认证。在 `backend/.env` 中添加：
+> ```env
+> VIGILOPS_MCP_TOKEN=your-secret-token-here
+> ```
+> 配置 MCP 客户端时需携带该 token。生产环境同时建议通过防火墙限制 8003 端口访问来源。
 
 #### 可用工具（共 5 个）
 

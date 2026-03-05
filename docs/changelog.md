@@ -16,6 +16,25 @@
 
 ---
 
+## [0.9.1] - 2026-03-05
+
+### Security
+- **P0** Fixed privilege escalation vulnerability in alert rule delete endpoint (non-admin users could delete any rule)
+- **P0** Implemented JWT httpOnly Cookie skeleton (migration from localStorage in progress)
+- **P0** Enhanced JWT secret key strength validation (minimum entropy enforcement)
+- **P0** Replaced deprecated `asyncio.get_event_loop()` calls for async safety
+
+### Fixed
+- Auto-remediation list now correctly displays alert name and host columns
+- i18n: Replaced hardcoded Chinese strings with `t()` calls across components
+- Added guided alert rule setup prompt after adding a new host
+
+### Improved
+- Unified PageHeader component across 6+ pages for consistent UI
+- Added PageBreadcrumb navigation to host/service/alert detail pages
+
+---
+
 ## v0.9.0 (2026-02-20)
 
 ### 新增
