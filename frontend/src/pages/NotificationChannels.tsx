@@ -1,26 +1,16 @@
 /**
  * 通知渠道管理页面
- * 提供通知渠道的增删改查功能，支持 Webhook、邮件、钉钉、飞书、企业微信 五种渠道类型。
  */
 import { useEffect, useState } from 'react';
 import { useResponsive } from '../hooks/useResponsive';
 import { Table, Card, Typography, Button, Modal, Form, Input, InputNumber, Switch, Space, Select, Tag, message } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { notificationService } from '../services/alerts';
 import type { NotificationChannel } from '../services/alerts';
 
 const { TextArea } = Input;
 
-/** 渠道类型选项 */
-const CHANNEL_TYPE_OPTIONS = [
-  { value: 'webhook', label: '通用 Webhook' },
-  { value: 'email', label: '邮件通知' },
-  { value: 'dingtalk', label: '钉钉机器人' },
-  { value: 'feishu', label: '飞书机器人' },
-  { value: 'wecom', label: '企业微信机器人' },
-];
-
-/** 渠道类型对应的 Tag 颜色 */
 const TYPE_TAG_COLOR: Record<string, string | undefined> = {
   webhook: undefined,
   email: 'blue',
@@ -29,18 +19,6 @@ const TYPE_TAG_COLOR: Record<string, string | undefined> = {
   wecom: 'green',
 };
 
-/** 渠道类型中文标签 */
-const TYPE_LABEL: Record<string, string> = {
-  webhook: 'Webhook',
-  email: '邮件',
-  dingtalk: '钉钉',
-  feishu: '飞书',
-  wecom: '企业微信',
-};
-
-/**
- * 根据渠道类型和表单值构建 config 对象
- */
 function buildConfig(type: string, values: Record<string, unknown>): Record<string, unknown> {
   switch (type) {
     case 'webhook':
@@ -74,9 +52,6 @@ function buildConfig(type: string, values: Record<string, unknown>): Record<stri
   }
 }
 
-/**
- * 从 config 反向解析为表单字段值（用于编辑回填）
- */
 function parseConfigToFields(type: string, config: Record<string, unknown>): Record<string, unknown> {
   switch (type) {
     case 'webhook':
@@ -103,20 +78,16 @@ function parseConfigToFields(type: string, config: Record<string, unknown>): Rec
   }
 }
 
-/**
- * 通知渠道管理组件
- */
 export default function NotificationChannels() {
+  const { t } = useTranslation();
   const { isMobile } = useResponsive();
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  /** 当前编辑的渠道（null 表示新建） */
   const [editing, setEditing] = useState<NotificationChannel | null>(null);
   const [form] = Form.useForm();
   const [messageApi, contextHolder] = message.useMessage();
 
-  /** 获取通知渠道列表 */
   const fetchList = async () => {
     setLoading(true);
     try {
@@ -127,7 +98,6 @@ export default function NotificationChannels() {
 
   useEffect(() => { fetchList(); }, []);
 
-  /** 打开新建弹窗 */
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
@@ -135,7 +105,6 @@ export default function NotificationChannels() {
     setModalOpen(true);
   };
 
-  /** 打开编辑弹窗 */
   const openEdit = (record: NotificationChannel) => {
     setEditing(record);
     const fields = parseConfigToFields(record.type, record.config);
@@ -144,7 +113,6 @@ export default function NotificationChannels() {
     setModalOpen(true);
   };
 
-  /** 提交创建/编辑 */
   const handleSubmit = async (values: Record<string, unknown>) => {
     const type = values.type as string;
     try {
@@ -152,7 +120,7 @@ export default function NotificationChannels() {
         JSON.parse(values.headers as string);
       }
     } catch {
-      messageApi.error('Headers 必须是合法的 JSON');
+      messageApi.error(t('notifications.headersInvalid'));
       return;
     }
 
@@ -164,7 +132,7 @@ export default function NotificationChannels() {
           type,
           config,
         });
-        messageApi.success('更新成功');
+        messageApi.success(t('notifications.updateSuccess'));
       } else {
         await notificationService.createChannel({
           name: values.name as string,
@@ -172,83 +140,87 @@ export default function NotificationChannels() {
           config,
           enabled: true,
         });
-        messageApi.success('创建成功');
+        messageApi.success(t('notifications.createSuccess'));
       }
       setModalOpen(false);
       form.resetFields();
       fetchList();
-    } catch { messageApi.error(editing ? '更新失败' : '创建失败'); }
+    } catch { messageApi.error(editing ? t('notifications.updateFailed') : t('notifications.createFailed')); }
   };
 
-  /** 切换渠道启用/禁用状态 */
   const handleToggle = async (record: NotificationChannel) => {
     try {
       await notificationService.updateChannel(record.id, { enabled: !record.enabled });
-      messageApi.success(record.enabled ? '已禁用' : '已启用');
+      messageApi.success(record.enabled ? t('notifications.disabledSuccess') : t('notifications.enabledSuccess'));
       fetchList();
-    } catch { messageApi.error('操作失败'); }
+    } catch { messageApi.error(t('notifications.actionFailed')); }
   };
 
-  /** 删除渠道 */
   const handleDelete = (id: number) => {
     Modal.confirm({
-      title: '确认删除此通知渠道？',
+      title: t('notifications.confirmDeleteChannel'),
       icon: <ExclamationCircleOutlined />,
       onOk: async () => {
         try {
           await notificationService.deleteChannel(id);
-          messageApi.success('已删除');
+          messageApi.success(t('notifications.deletedSuccess'));
           fetchList();
-        } catch { messageApi.error('删除失败'); }
+        } catch { messageApi.error(t('notifications.deleteFailed')); }
       },
     });
   };
 
-  /** 测试发送（后端接口暂未实现，弹提示） */
   const handleTestSend = (r: NotificationChannel) => {
     Modal.info({
-      title: `测试发送 - ${r.name}`,
-      content: '功能开发中，敬请期待。',
+      title: `${t('notifications.testSend')} - ${r.name}`,
+      content: t('notifications.testSendComingSoon'),
     });
   };
 
-  /** 表格列定义 */
   const columns = [
     { title: 'ID', dataIndex: 'id', width: 60 },
-    { title: '名称', dataIndex: 'name' },
+    { title: t('notifications.channelName'), dataIndex: 'name' },
     {
-      title: '类型', dataIndex: 'type', width: 120,
-      render: (t: string) => <Tag color={TYPE_TAG_COLOR[t]}>{TYPE_LABEL[t] || t}</Tag>,
+      title: t('notifications.channelType'), dataIndex: 'type', width: 120,
+      render: (val: string) => {
+        const typeLabel: Record<string, string> = {
+          webhook: t('notifications.typeWebhook'),
+          email: t('notifications.typeEmail'),
+          dingtalk: t('notifications.typeDingtalk'),
+          feishu: t('notifications.typeFeishu'),
+          wecom: t('notifications.typeWecom'),
+        };
+        return <Tag color={TYPE_TAG_COLOR[val]}>{typeLabel[val] || val}</Tag>;
+      },
     },
     {
-      title: '启用', dataIndex: 'enabled', width: 80,
+      title: t('notifications.enabled'), dataIndex: 'enabled', width: 80,
       render: (v: boolean, r: NotificationChannel) => (
         <Switch checked={v} onChange={() => handleToggle(r)} />
       ),
     },
-    { title: '创建时间', dataIndex: 'created_at', render: (t: string) => new Date(t).toLocaleString() },
+    { title: t('common.createdAt'), dataIndex: 'created_at', render: (val: string) => new Date(val).toLocaleString() },
     {
-      title: '操作', key: 'action', width: 220,
+      title: t('common.actions'), key: 'action', width: 220,
       render: (_: unknown, r: NotificationChannel) => (
         <Space>
-          <Button type="link" size="small" onClick={() => handleTestSend(r)}>测试发送</Button>
-          <Button type="link" size="small" onClick={() => openEdit(r)}>编辑</Button>
-          <Button type="link" danger size="small" onClick={() => handleDelete(r.id)}>删除</Button>
+          <Button type="link" size="small" onClick={() => handleTestSend(r)}>{t('notifications.testSend')}</Button>
+          <Button type="link" size="small" onClick={() => openEdit(r)}>{t('common.edit')}</Button>
+          <Button type="link" danger size="small" onClick={() => handleDelete(r.id)}>{t('common.delete')}</Button>
         </Space>
       ),
     },
   ];
 
-  /** 根据渠道类型渲染配置字段 */
   const renderConfigFields = (channelType: string) => {
     switch (channelType) {
       case 'webhook':
         return (
           <>
-            <Form.Item name="url" label="Webhook URL" rules={[{ required: true, message: '请输入 URL' }, { type: 'url', message: '请输入合法 URL' }]}>
+            <Form.Item name="url" label="Webhook URL" rules={[{ required: true, message: t('notifications.urlRequired') }, { type: 'url', message: t('notifications.urlInvalid') }]}>
               <Input placeholder="https://example.com/webhook" />
             </Form.Item>
-            <Form.Item name="headers" label="Headers（JSON，可选）">
+            <Form.Item name="headers" label={t('notifications.headersJson')}>
               <TextArea rows={3} placeholder='{"Content-Type": "application/json"}' />
             </Form.Item>
           </>
@@ -256,22 +228,22 @@ export default function NotificationChannels() {
       case 'email':
         return (
           <>
-            <Form.Item name="smtp_host" label="SMTP 服务器" rules={[{ required: true, message: '请输入 SMTP 服务器地址' }]}>
+            <Form.Item name="smtp_host" label={t('notifications.smtpServer')} rules={[{ required: true, message: t('notifications.smtpServerRequired') }]}>
               <Input placeholder="smtp.example.com" />
             </Form.Item>
-            <Form.Item name="smtp_port" label="SMTP 端口" rules={[{ required: true }]}>
+            <Form.Item name="smtp_port" label={t('notifications.smtpPort')} rules={[{ required: true }]}>
               <InputNumber min={1} max={65535} style={{ width: '100%' }} />
             </Form.Item>
-            <Form.Item name="smtp_user" label="SMTP 用户名" rules={[{ required: true, message: '请输入用户名' }]}>
+            <Form.Item name="smtp_user" label={t('notifications.smtpUser')} rules={[{ required: true, message: t('notifications.smtpUserRequired') }]}>
               <Input placeholder="user@example.com" />
             </Form.Item>
-            <Form.Item name="smtp_password" label="SMTP 密码" rules={[{ required: true, message: '请输入密码' }]}>
-              <Input.Password placeholder="密码" />
+            <Form.Item name="smtp_password" label={t('notifications.smtpPassword')} rules={[{ required: true, message: t('notifications.smtpPasswordRequired') }]}>
+              <Input.Password />
             </Form.Item>
-            <Form.Item name="smtp_ssl" label="启用 SSL" valuePropName="checked">
+            <Form.Item name="smtp_ssl" label={t('notifications.smtpSsl')} valuePropName="checked">
               <Switch />
             </Form.Item>
-            <Form.Item name="recipients" label="收件人（每行一个邮箱）" rules={[{ required: true, message: '请输入收件人' }]}>
+            <Form.Item name="recipients" label={t('notifications.recipients')} rules={[{ required: true, message: t('notifications.recipientsRequired') }]}>
               <TextArea rows={3} placeholder={'admin@example.com\nops@example.com'} />
             </Form.Item>
           </>
@@ -279,10 +251,10 @@ export default function NotificationChannels() {
       case 'dingtalk':
         return (
           <>
-            <Form.Item name="webhook_url" label="Webhook URL" rules={[{ required: true, message: '请输入钉钉机器人 Webhook URL' }]}>
+            <Form.Item name="webhook_url" label="Webhook URL" rules={[{ required: true, message: t('notifications.dingtalkUrlRequired') }]}>
               <Input placeholder="https://oapi.dingtalk.com/robot/send?access_token=..." />
             </Form.Item>
-            <Form.Item name="secret" label="加签密钥（可选）">
+            <Form.Item name="secret" label={t('notifications.signSecret')}>
               <Input placeholder="SEC..." />
             </Form.Item>
           </>
@@ -290,17 +262,17 @@ export default function NotificationChannels() {
       case 'feishu':
         return (
           <>
-            <Form.Item name="webhook_url" label="Webhook URL" rules={[{ required: true, message: '请输入飞书机器人 Webhook URL' }]}>
+            <Form.Item name="webhook_url" label="Webhook URL" rules={[{ required: true, message: t('notifications.feishuUrlRequired') }]}>
               <Input placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..." />
             </Form.Item>
-            <Form.Item name="secret" label="签名校验密钥（可选）">
-              <Input placeholder="密钥" />
+            <Form.Item name="secret" label={t('notifications.signVerifySecret')}>
+              <Input />
             </Form.Item>
           </>
         );
       case 'wecom':
         return (
-          <Form.Item name="webhook_url" label="Webhook URL" rules={[{ required: true, message: '请输入企业微信机器人 Webhook URL' }]}>
+          <Form.Item name="webhook_url" label="Webhook URL" rules={[{ required: true, message: t('notifications.wecomUrlRequired') }]}>
             <Input placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." />
           </Form.Item>
         );
@@ -309,20 +281,27 @@ export default function NotificationChannels() {
     }
   };
 
+  const channelTypeOptions = [
+    { value: 'webhook', label: t('notifications.channelWebhook') },
+    { value: 'email', label: t('notifications.channelEmail') },
+    { value: 'dingtalk', label: t('notifications.channelDingtalk') },
+    { value: 'feishu', label: t('notifications.channelFeishu') },
+    { value: 'wecom', label: t('notifications.channelWecom') },
+  ];
+
   return (
     <div>
       {contextHolder}
-      <Typography.Title level={4}>通知渠道</Typography.Title>
+      <Typography.Title level={4}>{t('notifications.channels')}</Typography.Title>
       <Space style={{ marginBottom: 16 }}>
-        <Button type="primary" onClick={openCreate}>新增渠道</Button>
+        <Button type="primary" onClick={openCreate}>{t('notifications.addChannel')}</Button>
       </Space>
       <Card>
         <Table dataSource={channels} columns={columns} rowKey="id" loading={loading} pagination={false} />
       </Card>
 
-      {/* 新建/编辑渠道弹窗 */}
       <Modal
-        title={editing ? '编辑渠道' : '新增渠道'}
+        title={editing ? t('notifications.editChannel') : t('notifications.addChannel')}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         onOk={() => form.submit()}
@@ -330,13 +309,12 @@ export default function NotificationChannels() {
         width={isMobile ? '100%' : 560}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} initialValues={{ type: 'webhook', smtp_port: 465, smtp_ssl: true }}>
-          <Form.Item name="name" label="渠道名称" rules={[{ required: true, message: '请输入名称' }]}>
-            <Input placeholder="例如: 运维群通知" />
+          <Form.Item name="name" label={t('notifications.channelNameLabel')} rules={[{ required: true, message: t('notifications.nameRequired') }]}>
+            <Input placeholder={t('notifications.channelExamplePlaceholder')} />
           </Form.Item>
-          <Form.Item name="type" label="渠道类型" rules={[{ required: true }]}>
-            <Select options={CHANNEL_TYPE_OPTIONS} disabled={!!editing} />
+          <Form.Item name="type" label={t('notifications.channelTypeLabel')} rules={[{ required: true }]}>
+            <Select options={channelTypeOptions} disabled={!!editing} />
           </Form.Item>
-          {/* 根据渠道类型动态渲染配置字段 */}
           <Form.Item noStyle shouldUpdate={(prev, cur) => prev.type !== cur.type}>
             {({ getFieldValue }) => renderConfigFields(getFieldValue('type'))}
           </Form.Item>

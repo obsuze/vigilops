@@ -104,7 +104,7 @@ function calcScoreBreakdown(data: DashboardData, logStats: LogStats): ScoreDeduc
   const fatalCount = logStats.by_level.find(l => l.level === 'FATAL')?.count ?? 0;
   if (fatalCount > 0) {
     deductions.push({
-      reason: `FATAL 日志 ×${fatalCount}`,
+      reason: `FATAL Logs ×${fatalCount}`,
       points: -Math.min(Math.round(fatalCount * 1.5), 15),
     });
   }
@@ -112,7 +112,7 @@ function calcScoreBreakdown(data: DashboardData, logStats: LogStats): ScoreDeduc
   const errorCount = logStats.by_level.find(l => l.level === 'ERROR')?.count ?? 0;
   if (errorCount > 0) {
     deductions.push({
-      reason: `ERROR 日志 ×${errorCount}`,
+      reason: `ERROR Logs ×${errorCount}`,
       points: -Math.min(Math.floor(errorCount / 10), 10),
     });
   }
