@@ -162,7 +162,7 @@ export default function Login() {
       
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'LDAP登录失败');
+        throw new Error(error.detail || t('login.ldapLoginFailed'));
       }
       
       const { access_token, refresh_token } = await response.json();
