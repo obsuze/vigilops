@@ -89,6 +89,9 @@ const en = {
     oauthFailed: 'OAuth login failed',
     oauthTitle: 'Or sign in with',
     ldapNotAvailable: 'LDAP authentication is not configured or unavailable',
+    forgotPassword: 'Forgot Password?',
+    forgotPasswordTitle: 'Forgot Password',
+    forgotPasswordContent: 'Please contact your administrator to reset the password.',
     validation: {
       emailRequired: 'Please enter your email',
       emailInvalid: 'Invalid email format',
@@ -259,6 +262,9 @@ const en = {
     evidence: 'Evidence:',
     recommendations: 'Recommendations:',
     analysisFailed: 'AI analysis failed',
+    analyzeNow: 'Analyze Now',
+    clickToAnalyze: 'Click "Analyze Now" to get AI root cause analysis',
+    aiSpinTip: 'AI analyzing...',
     title_field: 'Title',
     message_field: 'Message',
     noAlerts: 'No alerts',
@@ -356,6 +362,11 @@ const en = {
     sixHours: '6 Hours',
     twentyFourHours: '24 Hours',
     sevenDays: '7 Days',
+    cpuUsage: 'CPU Usage',
+    memoryUsage: 'Memory Usage',
+    diskUsage: 'Disk Usage',
+    activeAlerts: 'Active Alerts ({{count}})',
+    noActiveAlerts: 'No Active Alerts',
   },
 
   // ========== Services ==========
@@ -394,6 +405,12 @@ const en = {
     servers: 'servers',
     serviceCategoryFilter: 'Category',
     runningStatusFilter: 'Status',
+    slaTarget: 'SLA Target',
+    currentCompliance: 'Current Compliance',
+    slaMet: 'Met',
+    slaNotMet: 'Not Met',
+    slaNoData: 'No Data',
+    checkHistoryTitle: 'Check History',
   },
 
   // ========== Logs ==========
@@ -617,6 +634,9 @@ const en = {
     insightTypeRootCause: 'Root Cause',
     insightTypeChat: 'Chat',
     insightTypeTrend: 'Trend',
+    tryHealthStatus: 'Try: How is the system health?',
+    tryRecentAnomalies: 'Try: Any recent anomalies?',
+    tryCpuSpike: 'Try: Why is server CPU spiking?',
   },
 
   // ========== Reports ==========
@@ -732,6 +752,8 @@ const en = {
     previewSubject: 'Subject:',
     previewBody: 'Body:',
     updatedSuccess: 'Updated',
+    testSend: 'Test Send',
+    testSendComingSoon: 'Feature under development, stay tuned.',
     // Logs
     logManagement: 'Notification Log Management',
     totalNotifications: 'Total Notifications',

@@ -20,23 +20,20 @@ import {
   LikeOutlined,
   DislikeOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import api from '../services/api';
 import { aiFeedbackService } from '../services/aiFeedback';
 
 const { Title, Text, Paragraph } = Typography;
 
-/** 后端返回的系统概况原始数据结构 */
 interface SystemSummaryRaw {
   hosts: { total: number; online: number; offline: number };
   services: { total: number; up: number; down: number };
-  /** 最近 1 小时的告警和错误日志数 */
   recent_1h: { alert_count: number; error_log_count: number };
-  /** 平均资源使用率 */
   avg_usage: { cpu_percent: number; memory_percent: number };
 }
 
-/** 前端使用的系统概况（扁平化结构） */
 interface SystemSummary {
   total_hosts: number;
   online_hosts: number;
@@ -44,143 +41,107 @@ interface SystemSummary {
   total_services: number;
   healthy_services: number;
   unhealthy_services: number;
-  /** 最近 1 小时告警数 */
   alerts_1h: number;
-  /** 最近 1 小时错误日志数 */
   error_logs_1h: number;
-  /** 平均 CPU 使用率 */
   avg_cpu: number;
-  /** 平均内存使用率 */
   avg_memory: number;
 }
 
-/** 聊天消息结构 */
 interface ChatMessage {
-  id: string; // 消息唯一ID
+  id: string;
   role: 'user' | 'ai';
   content: string;
-  /** AI 回答的参考来源 */
+  isError?: boolean;
   sources?: Array<{ type: string; summary: string }>;
-  /** 引用的历史运维记忆 */
   memory_context?: Array<Record<string, any>>;
-  timestamp: number; // 消息时间戳
+  timestamp: number;
 }
 
-/** AI 洞察条目 */
 interface InsightItem {
   id: number;
-  /** 洞察类型：anomaly/root_cause/chat/trend */
   insight_type: string;
-  /** 严重级别 */
   severity: string;
   title: string;
   summary: string;
-  /** 详情数据（结构不固定） */
   details: any;
-  /** 关联的主机 ID */
   related_host_id: number | null;
-  /** 状态：new/acknowledged/resolved */
   status: string;
   created_at: string;
 }
 
-/** 严重级别颜色映射 */
 const severityColor: Record<string, string> = { critical: 'red', high: 'orange', warning: 'gold', medium: 'orange', low: 'blue', info: 'blue' };
-/** 洞察类型中文标签映射 */
-const insightTypeLabel: Record<string, string> = { anomaly: '异常检测', root_cause: '根因分析', chat: '对话', trend: '趋势' };
 
-/** 快捷提问列表 */
-const quickQuestions = ['系统健康状况如何？', '最近有什么异常？', '性能趋势分析'];
-
-/**
- * AI 智能分析页面组件
- */
 export default function AIAnalysis() {
-  // ========== 系统概况 ==========
+  const { t } = useTranslation();
+
+  const insightTypeLabel: Record<string, string> = {
+    anomaly: t('aiAnalysis.insightTypeAnomaly'),
+    root_cause: t('aiAnalysis.insightTypeRootCause'),
+    chat: t('aiAnalysis.insightTypeChat'),
+    trend: t('aiAnalysis.insightTypeTrend'),
+  };
+
+  const quickQuestions = [
+    t('aiAnalysis.quickQuestions.healthStatus'),
+    t('aiAnalysis.quickQuestions.recentAnomalies'),
+    t('aiAnalysis.quickQuestions.performanceTrend'),
+  ];
+
   const [summary, setSummary] = useState<SystemSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
-
-  // ========== AI 对话 ==========
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
-
-  // ========== AI 反馈 ==========
   const [feedbackLoading, setFeedbackLoading] = useState(false);
-  const [messageFeedback, setMessageFeedback] = useState<Record<string, { rating?: number; helpful?: boolean }>>({}); // 消息反馈状态
-  
-  /** 快速反馈处理（👍👎） */
-  const handleQuickFeedback = async (messageId: string, message: ChatMessage, isHelpful: boolean) => {
-    if (message.role !== 'ai') return;
-    
+  const [messageFeedback, setMessageFeedback] = useState<Record<string, { rating?: number; helpful?: boolean }>>({});
+
+  const handleQuickFeedback = async (messageId: string, msg: ChatMessage, isHelpful: boolean) => {
+    if (msg.role !== 'ai') return;
     setFeedbackLoading(true);
     try {
       await aiFeedbackService.quickFeedback({
-        ai_response: message.content,
-        rating: isHelpful ? 4 : 2, // 👍=4分，👎=2分
+        ai_response: msg.content,
+        rating: isHelpful ? 4 : 2,
         is_helpful: isHelpful
       });
-      
-      // 更新本地反馈状态
-      setMessageFeedback(prev => ({
-        ...prev,
-        [messageId]: { helpful: isHelpful }
-      }));
-      
-      messageApi.success('反馈已提交，谢谢！');
-    } catch (error) {
-      messageApi.error('反馈提交失败，请稍后重试');
+      setMessageFeedback(prev => ({ ...prev, [messageId]: { helpful: isHelpful } }));
+      messageApi.success(t('aiAnalysis.feedbackSubmitted'));
+    } catch {
+      messageApi.error(t('aiAnalysis.feedbackFailed'));
     } finally {
       setFeedbackLoading(false);
     }
   };
 
-  /** 评分反馈处理（1-5星） */
-  const handleRatingFeedback = async (messageId: string, message: ChatMessage, rating: number) => {
-    if (message.role !== 'ai' || rating === 0) return;
-    
+  const handleRatingFeedback = async (messageId: string, msg: ChatMessage, rating: number) => {
+    if (msg.role !== 'ai' || rating === 0) return;
     setFeedbackLoading(true);
     try {
       await aiFeedbackService.quickFeedback({
-        ai_response: message.content,
+        ai_response: msg.content,
         rating: rating,
-        is_helpful: rating >= 3 // 3星及以上认为有用
+        is_helpful: rating >= 3
       });
-      
-      // 更新本地反馈状态
-      setMessageFeedback(prev => ({
-        ...prev,
-        [messageId]: { rating: rating, helpful: rating >= 3 }
-      }));
-      
-      messageApi.success('评分已提交，谢谢！');
-    } catch (error) {
-      messageApi.error('评分提交失败，请稍后重试');
+      setMessageFeedback(prev => ({ ...prev, [messageId]: { rating: rating, helpful: rating >= 3 } }));
+      messageApi.success(t('aiAnalysis.ratingSubmitted'));
+    } catch {
+      messageApi.error(t('aiAnalysis.ratingFailed'));
     } finally {
       setFeedbackLoading(false);
     }
   };
-  /** 聊天区域底部锚点，用于自动滚动 */
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // ========== AI 洞察列表 ==========
+  const chatEndRef = useRef<HTMLDivElement>(null);
   const [insights, setInsights] = useState<InsightItem[]>([]);
   const [insightsTotal, setInsightsTotal] = useState(0);
   const [insightsLoading, setInsightsLoading] = useState(true);
   const [insightsPage, setInsightsPage] = useState(1);
-  /** 洞察严重级别筛选 */
   const [insightSeverity, setInsightSeverity] = useState<string>('');
-  /** 洞察状态筛选 */
   const [insightStatus, setInsightStatus] = useState<string>('');
-  /** 手动触发分析的加载状态 */
   const [analyzeLoading, setAnalyzeLoading] = useState(false);
 
   const [messageApi, contextHolder] = message.useMessage();
 
-  /** 获取系统概况数据 (Fetch system overview data)
-   * 从后端获取原始嵌套结构数据，转换为前端使用的扁平化格式
-   * 包含主机、服务、告警、日志统计以及平均资源使用率
-   */
   const fetchSummary = async () => {
     setSummaryLoading(true);
     try {
@@ -200,10 +161,6 @@ export default function AIAnalysis() {
     } catch { /* ignore */ } finally { setSummaryLoading(false); }
   };
 
-  /** 获取 AI 洞察分析列表 (Fetch AI insights analysis list)
-   * 支持按严重级别(critical/high/warning/info)和状态(new/acknowledged/resolved)筛选
-   * 分页显示AI自动产生的异常检测、根因分析、趋势分析等洞察
-   */
   const fetchInsights = async () => {
     setInsightsLoading(true);
     try {
@@ -219,17 +176,10 @@ export default function AIAnalysis() {
   useEffect(() => { fetchSummary(); }, []);
   useEffect(() => { fetchInsights(); }, [insightsPage, insightSeverity, insightStatus]);
 
-  // 聊天消息更新时自动滚动到底部
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  /** AI 对话流程处理 (AI chat flow handler)
-   * 1. 追加用户消息到对话历史
-   * 2. 调用后端 AI 聊天接口，传入用户问题
-   * 3. 获取 AI 回答，包含答案内容、参考来源、运维记忆上下文
-   * 4. 追加 AI 回复到对话历史，失败时显示友好错误信息
-   */
   const sendChat = async (question: string) => {
     if (!question.trim()) return;
     const q = question.trim();
@@ -257,45 +207,41 @@ export default function AIAnalysis() {
       const errorMessage: ChatMessage = {
         id: `ai_error_${Date.now()}`,
         role: 'ai',
-        content: '抱歉，AI 分析暂时不可用，请稍后再试。',
+        isError: true,
+        content: t('aiAnalysis.aiUnavailable'),
         timestamp: Date.now()
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally { setChatLoading(false); }
   };
 
-  /** 手动触发日志智能分析 (Manually trigger log intelligent analysis)
-   * 调用 AI 引擎分析最近1小时的日志数据，识别异常模式和潜在问题
-   * 分析完成后自动刷新洞察列表，展示新发现的问题
-   */
   const handleAnalyze = async () => {
     setAnalyzeLoading(true);
     try {
       await api.post('/ai/analyze-logs', { hours: 1 });
-      messageApi.success('分析完成');
+      messageApi.success(t('aiAnalysis.analyzeSuccess'));
       fetchInsights();
     } catch {
-      messageApi.error('分析失败');
+      messageApi.error(t('aiAnalysis.analyzeFailed'));
     } finally { setAnalyzeLoading(false); }
   };
 
-  /** 洞察列表表格列定义 */
   const insightColumns = [
     {
-      title: '时间', dataIndex: 'created_at', width: 170,
-      render: (t: string) => dayjs(t).format('YYYY-MM-DD HH:mm:ss'),
+      title: t('aiAnalysis.insightTime'), dataIndex: 'created_at', width: 170,
+      render: (val: string) => dayjs(val).format('YYYY-MM-DD HH:mm:ss'),
     },
     {
-      title: '类型', dataIndex: 'insight_type', width: 100,
-      render: (t: string) => <Tag>{insightTypeLabel[t] || t}</Tag>,
+      title: t('aiAnalysis.insightType'), dataIndex: 'insight_type', width: 100,
+      render: (val: string) => <Tag>{insightTypeLabel[val] || val}</Tag>,
     },
     {
-      title: '严重性', dataIndex: 'severity', width: 90,
+      title: t('aiAnalysis.insightSeverity'), dataIndex: 'severity', width: 90,
       render: (s: string) => <Tag color={severityColor[s] || 'default'}>{s}</Tag>,
     },
-    { title: '标题', dataIndex: 'title', ellipsis: true },
+    { title: t('aiAnalysis.insightTitle'), dataIndex: 'title', ellipsis: true },
     {
-      title: '状态', dataIndex: 'status', width: 80,
+      title: t('aiAnalysis.insightStatus'), dataIndex: 'status', width: 80,
       render: (s: string) => <Tag color={s === 'resolved' ? 'green' : s === 'new' ? 'blue' : 'default'}>{s}</Tag>,
     },
   ];
@@ -303,51 +249,50 @@ export default function AIAnalysis() {
   return (
     <div>
       {contextHolder}
-      <Title level={4}><RobotOutlined /> AI 智能分析</Title>
+      <Title level={4}><RobotOutlined /> {t('aiAnalysis.title')}</Title>
 
       {/* 系统概况统计卡片 */}
       <Spin spinning={summaryLoading}>
         <Row gutter={[16, 16]}>
           <Col xs={24} sm={12} md={6}>
             <Card>
-              <Statistic title="主机" value={summary?.online_hosts ?? '-'} suffix={`/ ${summary?.total_hosts ?? '-'}`} prefix={<CloudServerOutlined />} />
-              <Text type="secondary">在线 / 总数</Text>
+              <Statistic title={t('aiAnalysis.hosts')} value={summary?.online_hosts ?? '-'} suffix={`/ ${summary?.total_hosts ?? '-'}`} prefix={<CloudServerOutlined />} />
+              <Text type="secondary">{t('aiAnalysis.onlineTotal')}</Text>
             </Card>
           </Col>
           <Col xs={24} sm={12} md={6}>
             <Card>
-              <Statistic title="服务" value={summary?.healthy_services ?? '-'} suffix={`/ ${summary?.total_services ?? '-'}`} prefix={<ApiOutlined />} />
-              <Text type="secondary">健康 / 总数</Text>
+              <Statistic title={t('aiAnalysis.services')} value={summary?.healthy_services ?? '-'} suffix={`/ ${summary?.total_services ?? '-'}`} prefix={<ApiOutlined />} />
+              <Text type="secondary">{t('aiAnalysis.healthyTotal')}</Text>
             </Card>
           </Col>
           <Col xs={24} sm={12} md={6}>
             <Card>
-              <Statistic title="1h 告警" value={summary?.alerts_1h ?? '-'} prefix={<AlertOutlined />}
+              <Statistic title={t('aiAnalysis.alerts1h')} value={summary?.alerts_1h ?? '-'} prefix={<AlertOutlined />}
                 valueStyle={{ color: (summary?.alerts_1h ?? 0) > 0 ? '#cf1322' : '#3f8600' }} />
             </Card>
           </Col>
           <Col xs={24} sm={12} md={6}>
             <Card>
-              <Statistic title="1h 错误日志" value={summary?.error_logs_1h ?? '-'} prefix={<FileTextOutlined />}
+              <Statistic title={t('aiAnalysis.errorLogs1h')} value={summary?.error_logs_1h ?? '-'} prefix={<FileTextOutlined />}
                 valueStyle={{ color: (summary?.error_logs_1h ?? 0) > 0 ? '#cf1322' : '#3f8600' }} />
             </Card>
           </Col>
         </Row>
-        {/* 平均 CPU / 内存使用率环形进度条 */}
         {summary && (
           <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
             <Col xs={12} sm={6}>
               <Card size="small" style={{ textAlign: 'center' }}>
                 <Progress type="circle" percent={Math.round(summary.avg_cpu)} size={80}
                   strokeColor={summary.avg_cpu > 80 ? '#ff4d4f' : summary.avg_cpu > 60 ? '#faad14' : '#52c41a'} />
-                <div style={{ marginTop: 8 }}><Text type="secondary">平均 CPU</Text></div>
+                <div style={{ marginTop: 8 }}><Text type="secondary">{t('aiAnalysis.avgCpu')}</Text></div>
               </Card>
             </Col>
             <Col xs={12} sm={6}>
               <Card size="small" style={{ textAlign: 'center' }}>
                 <Progress type="circle" percent={Math.round(summary.avg_memory)} size={80}
                   strokeColor={summary.avg_memory > 80 ? '#ff4d4f' : summary.avg_memory > 60 ? '#faad14' : '#52c41a'} />
-                <div style={{ marginTop: 8 }}><Text type="secondary">平均内存</Text></div>
+                <div style={{ marginTop: 8 }}><Text type="secondary">{t('aiAnalysis.avgMemory')}</Text></div>
               </Card>
             </Col>
           </Row>
@@ -355,27 +300,26 @@ export default function AIAnalysis() {
       </Spin>
 
       {/* AI 对话区域 */}
-      <Card title={<><RobotOutlined /> AI 对话</>} style={{ marginTop: 16 }}>
-        {/* 消息展示区 */}
+      <Card title={<><RobotOutlined /> {t('aiAnalysis.aiChat')}</>} style={{ marginTop: 16 }}>
         <div style={{
           background: '#f5f7fa', borderRadius: 8, padding: 16, minHeight: 200, maxHeight: 400, overflowY: 'auto', marginBottom: 16,
         }}>
           {messages.length === 0 && (
             <div style={{ textAlign: 'center', padding: '32px 0', color: '#999' }}>
               <RobotOutlined style={{ fontSize: 40, marginBottom: 12 }} />
-              <div style={{ marginBottom: 20 }}>向 AI 提问，了解系统运行状况</div>
+              <div style={{ marginBottom: 20 }}>{t('aiAnalysis.askAI')}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
                 {[
-                  '试试问：系统健康状况如何？',
-                  '试试问：最近有什么异常？',
-                  '试试问：服务器 CPU 为何飙升？',
+                  t('aiAnalysis.tryHealthStatus'),
+                  t('aiAnalysis.tryRecentAnomalies'),
+                  t('aiAnalysis.tryCpuSpike'),
                 ].map(hint => (
                   <Button
                     key={hint}
                     size="small"
                     type="dashed"
                     icon={<ThunderboltOutlined />}
-                    onClick={() => sendChat(hint.replace(/^试试问：/, ''))}
+                    onClick={() => sendChat(hint.replace(/^(Try: |试试问：)/, ''))}
                     style={{ color: '#595959', borderColor: '#d9d9d9' }}
                   >
                     {hint}
@@ -400,17 +344,16 @@ export default function AIAnalysis() {
                 <div style={{ marginBottom: 4 }}>
                   {msg.role === 'user' ? <UserOutlined /> : <RobotOutlined />}
                   <Text style={{ marginLeft: 6, color: msg.role === 'user' ? '#fff' : '#666', fontSize: 12 }}>
-                    {msg.role === 'user' ? '你' : 'AI 助手'}
+                    {msg.role === 'user' ? t('aiAnalysis.youLabel') : t('aiAnalysis.aiAssistant')}
                   </Text>
                 </div>
                 <Paragraph style={{ margin: 0, color: msg.role === 'user' ? '#fff' : '#333', whiteSpace: 'pre-wrap' }}>
                   {msg.content}
                 </Paragraph>
-                {/* AI 回答的参考来源折叠面板 */}
                 {msg.sources && msg.sources.length > 0 && (
                   <Collapse ghost style={{ marginTop: 8 }} items={[{
                     key: '1',
-                    label: <Text type="secondary" style={{ fontSize: 12 }}>参考来源 ({msg.sources.length})</Text>,
+                    label: <Text type="secondary" style={{ fontSize: 12 }}>{t('aiAnalysis.referenceSources', { count: msg.sources.length })}</Text>,
                     children: msg.sources.map((s, j) => (
                       <div key={j} style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
                         <Tag>{s.type}</Tag> {s.summary}
@@ -418,11 +361,10 @@ export default function AIAnalysis() {
                     )),
                   }]} />
                 )}
-                {/* 历史运维记忆引用 */}
                 {msg.memory_context && msg.memory_context.length > 0 && (
                   <Collapse ghost style={{ marginTop: 4 }} items={[{
                     key: 'memory',
-                    label: <Text type="secondary" style={{ fontSize: 12 }}>📚 参考了 {msg.memory_context.length} 条历史运维经验</Text>,
+                    label: <Text type="secondary" style={{ fontSize: 12 }}>📚 {t('aiAnalysis.historyContext', { count: msg.memory_context.length })}</Text>,
                     children: msg.memory_context.map((mem, j) => (
                       <div key={j} style={{ fontSize: 12, color: '#666', marginBottom: 4, padding: '4px 8px', background: '#f9f9f9', borderRadius: 4 }}>
                         {mem.content || mem.text || JSON.stringify(mem)}
@@ -430,46 +372,45 @@ export default function AIAnalysis() {
                     )),
                   }]} />
                 )}
-                
-                {/* AI 反馈组件 - 只在AI回答中显示 */}
-                {msg.role === 'ai' && !msg.content.includes('抱歉，AI 分析暂时不可用') && (
-                  <div style={{ 
-                    marginTop: 8, 
-                    paddingTop: 8, 
+
+                {msg.role === 'ai' && !msg.isError && (
+                  <div style={{
+                    marginTop: 8,
+                    paddingTop: 8,
                     borderTop: '1px solid #f0f0f0',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
                     fontSize: 12
                   }}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>这个回答对你有帮助吗？</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{t('aiAnalysis.helpful')}</Text>
                     <Space size="small">
-                      <Tooltip title="有用">
-                        <Button 
-                          size="small" 
+                      <Tooltip title={t('aiAnalysis.useful')}>
+                        <Button
+                          size="small"
                           type={messageFeedback[msg.id]?.helpful === true ? 'primary' : 'text'}
                           icon={<LikeOutlined />}
                           onClick={() => handleQuickFeedback(msg.id, msg, true)}
                           loading={feedbackLoading}
                           disabled={messageFeedback[msg.id]?.helpful !== undefined}
                         >
-                          有用
+                          {t('aiAnalysis.useful')}
                         </Button>
                       </Tooltip>
-                      <Tooltip title="无用">
-                        <Button 
+                      <Tooltip title={t('aiAnalysis.useless')}>
+                        <Button
                           size="small"
-                          type={messageFeedback[msg.id]?.helpful === false ? 'primary' : 'text'} 
+                          type={messageFeedback[msg.id]?.helpful === false ? 'primary' : 'text'}
                           icon={<DislikeOutlined />}
                           onClick={() => handleQuickFeedback(msg.id, msg, false)}
                           loading={feedbackLoading}
                           disabled={messageFeedback[msg.id]?.helpful !== undefined}
                         >
-                          无用
+                          {t('aiAnalysis.useless')}
                         </Button>
                       </Tooltip>
-                      <Rate 
-                        size="small" 
+                      <Rate
+                        size="small"
                         value={messageFeedback[msg.id]?.rating || 0}
                         onChange={(rating) => handleRatingFeedback(msg.id, msg, rating)}
                         disabled={messageFeedback[msg.id]?.rating !== undefined || feedbackLoading}
@@ -481,17 +422,15 @@ export default function AIAnalysis() {
               </div>
             </div>
           ))}
-          {/* AI 思考中加载提示 */}
           {chatLoading && (
             <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 12 }}>
               <div style={{ padding: '10px 14px', borderRadius: 12, background: '#fff', border: '1px solid #e8e8e8' }}>
-                <Spin size="small" /> <Text type="secondary">AI 正在思考...</Text>
+                <Spin size="small" /> <Text type="secondary">{t('aiAnalysis.aiThinking')}</Text>
               </div>
             </div>
           )}
           <div ref={chatEndRef} />
         </div>
-        {/* 快捷提问按钮 */}
         <Space wrap style={{ marginBottom: 12 }}>
           {quickQuestions.map(q => (
             <Button key={q} size="small" icon={<ThunderboltOutlined />} onClick={() => sendChat(q)} disabled={chatLoading}>
@@ -499,10 +438,9 @@ export default function AIAnalysis() {
             </Button>
           ))}
         </Space>
-        {/* 输入框 */}
         <Input.Search
-          placeholder="输入问题，例如：最近有没有异常？"
-          enterButton={<><SendOutlined /> 发送</>}
+          placeholder={t('aiAnalysis.chatPlaceholder')}
+          enterButton={<><SendOutlined /> {t('aiAnalysis.sendButton')}</>}
           value={chatInput}
           onChange={e => setChatInput(e.target.value)}
           onSearch={sendChat}
@@ -512,17 +450,16 @@ export default function AIAnalysis() {
       </Card>
 
       {/* AI 洞察列表 */}
-      <Card title="AI 洞察列表" style={{ marginTop: 16 }}
+      <Card title={t('aiAnalysis.insightList')} style={{ marginTop: 16 }}
         extra={
           <Button type="primary" icon={<ThunderboltOutlined />} loading={analyzeLoading} onClick={handleAnalyze}>
-            手动触发分析
+            {t('aiAnalysis.triggerAnalysis')}
           </Button>
         }
       >
-        {/* 筛选条件 */}
         <Row style={{ marginBottom: 16 }}>
           <Space>
-            <Select placeholder="严重性" allowClear style={{ width: 120 }}
+            <Select placeholder={t('aiAnalysis.filterSeverity')} allowClear style={{ width: 120 }}
               onChange={v => { setInsightSeverity(v || ''); setInsightsPage(1); }}
               options={[
                 { label: 'Critical', value: 'critical' },
@@ -532,12 +469,12 @@ export default function AIAnalysis() {
                 { label: 'Info', value: 'info' },
               ]}
             />
-            <Select placeholder="状态" allowClear style={{ width: 120 }}
+            <Select placeholder={t('aiAnalysis.filterStatus')} allowClear style={{ width: 120 }}
               onChange={v => { setInsightStatus(v || ''); setInsightsPage(1); }}
               options={[
-                { label: '新建', value: 'new' },
-                { label: '已确认', value: 'acknowledged' },
-                { label: '已解决', value: 'resolved' },
+                { label: t('aiAnalysis.insightNew'), value: 'new' },
+                { label: t('aiAnalysis.insightAcknowledged'), value: 'acknowledged' },
+                { label: t('aiAnalysis.insightResolved'), value: 'resolved' },
               ]}
             />
           </Space>
@@ -551,10 +488,10 @@ export default function AIAnalysis() {
           expandable={{
             expandedRowRender: (record: InsightItem) => (
               <div style={{ padding: '8px 0' }}>
-                <Paragraph><strong>摘要：</strong>{record.summary}</Paragraph>
+                <Paragraph><strong>{t('aiAnalysis.insightSummaryLabel')}</strong>{record.summary}</Paragraph>
                 {record.details && (
                   <Paragraph>
-                    <strong>详情：</strong>
+                    <strong>{t('aiAnalysis.insightDetailsLabel')}</strong>
                     <pre style={{ background: '#f5f5f5', padding: 12, borderRadius: 6, fontSize: 12, maxHeight: 300, overflow: 'auto' }}>
                       {typeof record.details === 'string' ? record.details : JSON.stringify(record.details, null, 2)}
                     </pre>

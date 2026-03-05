@@ -89,6 +89,9 @@ const zh = {
     oauthFailed: 'OAuth登录失败',
     oauthTitle: '或使用第三方账号登录',
     ldapNotAvailable: 'LDAP 认证未配置或不可用',
+    forgotPassword: '忘记密码？',
+    forgotPasswordTitle: '忘记密码',
+    forgotPasswordContent: '请联系管理员重置密码。',
     validation: {
       emailRequired: '请输入邮箱',
       emailInvalid: '邮箱格式不正确',
@@ -259,6 +262,9 @@ const zh = {
     evidence: '证据：',
     recommendations: '建议操作：',
     analysisFailed: 'AI 分析失败',
+    analyzeNow: '立即分析',
+    clickToAnalyze: '点击「立即分析」获取 AI 根因分析结果',
+    aiSpinTip: 'AI 分析中...',
     title_field: '标题',
     message_field: '消息',
     noAlerts: '暂无告警',
@@ -356,6 +362,11 @@ const zh = {
     sixHours: '6小时',
     twentyFourHours: '24小时',
     sevenDays: '7天',
+    cpuUsage: 'CPU 使用率',
+    memoryUsage: '内存使用率',
+    diskUsage: '磁盘使用率',
+    activeAlerts: '活跃告警（{{count}}）',
+    noActiveAlerts: '无活跃告警',
   },
 
   // ========== 服务监控 ==========
@@ -394,6 +405,12 @@ const zh = {
     servers: '台服务器',
     serviceCategoryFilter: '服务分类',
     runningStatusFilter: '运行状态',
+    slaTarget: 'SLA 目标',
+    currentCompliance: '当前达标率',
+    slaMet: '达标',
+    slaNotMet: '未达标',
+    slaNoData: '无数据',
+    checkHistoryTitle: '检查历史',
   },
 
   // ========== 日志管理 ==========
@@ -617,6 +634,9 @@ const zh = {
     insightTypeRootCause: '根因分析',
     insightTypeChat: '对话',
     insightTypeTrend: '趋势',
+    tryHealthStatus: '试试问：系统健康状况如何？',
+    tryRecentAnomalies: '试试问：最近有什么异常？',
+    tryCpuSpike: '试试问：服务器 CPU 为何飙升？',
   },
 
   // ========== 运维报告 ==========
@@ -732,6 +752,8 @@ const zh = {
     previewSubject: '标题：',
     previewBody: '消息体：',
     updatedSuccess: '已更新',
+    testSend: '测试发送',
+    testSendComingSoon: '功能开发中，敬请期待。',
     // 通知日志
     logManagement: '通知日志管理',
     totalNotifications: '总通知数',
