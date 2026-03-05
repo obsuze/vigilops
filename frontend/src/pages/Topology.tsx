@@ -46,15 +46,15 @@ type LayoutMode = 'grouped' | 'force';
 
 /* ==================== 配置 ==================== */
 
-const GROUP_CONFIG: Record<string, { label: string; color: string; bgColor: string; order: number; stage: number }> = {
-  web:      { label: '🌐 前端',    color: '#FFB800', bgColor: 'rgba(255,184,0,0.08)',   order: 0, stage: 0 },
-  api:      { label: '⚙️ 后端',    color: '#FF7F50', bgColor: 'rgba(255,127,80,0.08)',  order: 1, stage: 1 },
-  app:      { label: '📦 业务',    color: '#4FC3F7', bgColor: 'rgba(79,195,247,0.08)',  order: 2, stage: 1 },
-  registry: { label: '🔍 注册中心', color: '#AB47BC', bgColor: 'rgba(171,71,188,0.08)',  order: 3, stage: 2 },
-  mq:       { label: '📨 消息队列', color: '#00CED1', bgColor: 'rgba(0,206,209,0.08)',   order: 4, stage: 2 },
-  olap:     { label: '📊 分析引擎', color: '#FF8A65', bgColor: 'rgba(255,138,101,0.08)', order: 5, stage: 2 },
-  database: { label: '🗄️ 数据库',  color: '#7B68EE', bgColor: 'rgba(123,104,238,0.08)', order: 6, stage: 3 },
-  cache:    { label: '⚡ 缓存',    color: '#9ACD32', bgColor: 'rgba(154,205,50,0.08)',   order: 7, stage: 3 },
+const GROUP_CONFIG: Record<string, { color: string; bgColor: string; order: number; stage: number }> = {
+  web:      { color: '#FFB800', bgColor: 'rgba(255,184,0,0.08)',   order: 0, stage: 0 },
+  api:      { color: '#FF7F50', bgColor: 'rgba(255,127,80,0.08)',  order: 1, stage: 1 },
+  app:      { color: '#4FC3F7', bgColor: 'rgba(79,195,247,0.08)',  order: 2, stage: 1 },
+  registry: { color: '#AB47BC', bgColor: 'rgba(171,71,188,0.08)',  order: 3, stage: 2 },
+  mq:       { color: '#00CED1', bgColor: 'rgba(0,206,209,0.08)',   order: 4, stage: 2 },
+  olap:     { color: '#FF8A65', bgColor: 'rgba(255,138,101,0.08)', order: 5, stage: 2 },
+  database: { color: '#7B68EE', bgColor: 'rgba(123,104,238,0.08)', order: 6, stage: 3 },
+  cache:    { color: '#9ACD32', bgColor: 'rgba(154,205,50,0.08)',   order: 7, stage: 3 },
 };
 
 /** 管道阶段定义（从左到右） —— label 存储 i18n key，在组件内翻译 */
@@ -75,9 +75,9 @@ const shortName = (name: string) => {
   return s.length > 18 ? s.substring(0, 16) + '…' : s;
 };
 
-const EDGE_STYLES: Record<string, { color: string; type: 'solid' | 'dashed'; width: number; label: string }> = {
-  calls:      { color: '#1890ff', type: 'solid',  width: 2,   label: 'API 调用' },
-  depends_on: { color: '#faad14', type: 'dashed', width: 1.5, label: '依赖' },
+const EDGE_STYLES: Record<string, { color: string; type: 'solid' | 'dashed'; width: number; labelKey: string }> = {
+  calls:      { color: '#1890ff', type: 'solid',  width: 2,   labelKey: 'topology.legendApiCall' },
+  depends_on: { color: '#faad14', type: 'dashed', width: 1.5, labelKey: 'topology.legendDep' },
 };
 
 /* ==================== 分组布局 ==================== */
@@ -160,7 +160,7 @@ export default function Topology() {
       database: 'topology.categoryDb',
       cache:    'topology.categoryCache',
     };
-    return keyMap[group] ? t(keyMap[group]) : (GROUP_CONFIG[group]?.label || group);
+    return keyMap[group] ? t(keyMap[group]) : group;
   };
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
@@ -266,12 +266,12 @@ export default function Topology() {
           source_service_id: addSource,
           target_service_id: addTarget,
           dependency_type: addType,
-          description: addType === 'calls' ? 'API 调用（手动添加）' : '依赖关系（手动添加）',
+          description: addType === 'calls' ? t('topology.addCallsDesc') : t('topology.addDependsDesc'),
         }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || '添加失败');
+        throw new Error(err.detail || t('topology.addFailed'));
       }
       message.success(t('topology.depAdded'));
       setAddSource(undefined);
@@ -311,7 +311,7 @@ export default function Topology() {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
       });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'AI 分析失败');
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || t('topology.aiAnalysisFailed'));
       const data = await res.json();
       setAiSuggestions(data.suggestions || []);
       setAiMessage(data.message || '');
@@ -403,7 +403,7 @@ export default function Topology() {
         lineStyle: { color: style.color, type: style.type, width: style.width, curveness: 0.2 },
         edgeSymbol: ['none', 'arrow'] as [string, string], edgeSymbolSize: [0, 8],
         tooltip: {
-          formatter: `<b>${idMap.get(e.source) ?? e.source}</b> → <b>${idMap.get(e.target) ?? e.target}</b><br/>${style.label}: ${e.description}`,
+          formatter: `<b>${idMap.get(e.source) ?? e.source}</b> → <b>${idMap.get(e.target) ?? e.target}</b><br/>${t(style.labelKey)}: ${e.description}`,
         },
       };
     });
@@ -474,7 +474,7 @@ export default function Topology() {
 
   /** 节点下拉选项 */
   const nodeOptions = topoData.current?.nodes.map(n => ({
-    value: n.id, label: `${shortName(n.name)}  [${GROUP_CONFIG[n.group]?.label || n.group}]`,
+    value: n.id, label: `${shortName(n.name)}  [${getGroupLabel(n.group)}]`,
   })) || [];
 
   /** 当前依赖列表 */
@@ -507,10 +507,10 @@ export default function Topology() {
       <div style={{ marginBottom: 8 }}>
         <Space size={16}>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            连线: <span style={{ color: '#1890ff' }}>━</span> {t('topology.legendApiCall')}　<span style={{ color: '#faad14' }}>╌╌</span> {t('topology.legendDep')}
+            {t('topology.legendEdgeLabel')}: <span style={{ color: '#1890ff' }}>━</span> {t('topology.legendApiCall')}　<span style={{ color: '#faad14' }}>╌╌</span> {t('topology.legendDep')}
           </Text>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            边框: <span style={{ color: '#52c41a' }}>●</span> {t('topology.legendNormal')}　<span style={{ color: '#ff4d4f' }}>●</span> {t('topology.legendAbnormal')}
+            {t('topology.legendBorderLabel')}: <span style={{ color: '#52c41a' }}>●</span> {t('topology.legendNormal')}　<span style={{ color: '#ff4d4f' }}>●</span> {t('topology.legendAbnormal')}
           </Text>
           <Text type="secondary" style={{ fontSize: 12 }}>💡 {t('topology.dragTip')}</Text>
         </Space>
