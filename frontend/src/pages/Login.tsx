@@ -110,7 +110,7 @@ export default function Login() {
       localStorage.setItem('user_name', user.name);
       localStorage.setItem('user_role', user.role);
       messageApi.success(t('login.loginSuccess'));
-      navigate('/');
+      navigate('/dashboard');
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
       messageApi.error(err.response?.data?.detail || t('login.loginFailed'));
@@ -130,7 +130,7 @@ export default function Login() {
       localStorage.setItem('user_name', user.name);
       localStorage.setItem('user_role', user.role);
       messageApi.success(t('login.registerSuccess'));
-      navigate('/');
+      navigate('/dashboard');
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } } };
       messageApi.error(err.response?.data?.detail || t('login.registerFailed'));
@@ -174,7 +174,7 @@ export default function Login() {
       localStorage.setItem('user_name', user.name);
       localStorage.setItem('user_role', user.role);
       messageApi.success(t('login.ldapLoginSuccess'));
-      navigate('/');
+      navigate('/dashboard');
     } catch (e: any) {
       messageApi.error(e.message || t('login.ldapLoginFailed'));
     } finally {
@@ -422,7 +422,7 @@ export default function Login() {
                 </Form.Item>
                 <div style={{ textAlign: 'right', marginTop: -16, marginBottom: 12 }}>
                   <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setForgotModalOpen(true)}>
-                    忘记密码？
+                    {t('login.forgotPassword')}
                   </Button>
                 </div>
                 <Form.Item>
@@ -593,13 +593,13 @@ export default function Login() {
         </Row>
       </Card>
       <Modal
-        title="忘记密码"
+        title={t('login.forgotPasswordTitle')}
         open={forgotModalOpen}
         onCancel={() => setForgotModalOpen(false)}
         onOk={() => setForgotModalOpen(false)}
         cancelButtonProps={{ style: { display: 'none' } }}
       >
-        <p>请联系管理员重置密码。</p>
+        <p>{t('login.forgotPasswordContent')}</p>
       </Modal>
       <div style={{
         marginTop: 32,

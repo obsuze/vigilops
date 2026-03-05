@@ -95,7 +95,7 @@ export default function SLA() {
     setStatusLoading(true);
     try {
       const res = await api.get('/sla/status');
-      setStatusList(res.data);
+      setStatusList(Array.isArray(res.data) ? res.data : []);
       // 为每个有数据的服务加载 30 天趋势
       for (const s of res.data) {
         try {
@@ -123,7 +123,7 @@ export default function SLA() {
         params.end_date = violDates[1].format('YYYY-MM-DD');
       }
       const res = await api.get('/sla/violations', { params });
-      setViolations(res.data);
+      setViolations(Array.isArray(res.data) ? res.data : []);
     } catch {
       message.error(t('sla.loadViolationsFailed'));
     }
@@ -138,8 +138,9 @@ export default function SLA() {
         api.get('/sla/rules'),
         api.get('/services'),
       ]);
-      setRules(rulesRes.data);
-      setServices(svcRes.data.items || svcRes.data);
+      setRules(Array.isArray(rulesRes.data) ? rulesRes.data : []);
+      const svcData = svcRes.data;
+      setServices(Array.isArray(svcData?.items) ? svcData.items : Array.isArray(svcData) ? svcData : []);
     } catch {
       message.error(t('sla.loadRulesFailed'));
     }

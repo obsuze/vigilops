@@ -151,6 +151,7 @@ export default function CustomizableDashboard() {
   const [wsData, setWsData] = useState<WsDashboardData | null>(null);
   const [trends, setTrends] = useState<TrendPoint[]>([]);
   const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
+  const [aiLoading, setAiLoading] = useState(true);
 
   // 布局状态
   const [config, setConfig] = useState<DashboardConfig>(DEFAULT_CONFIG);
@@ -235,11 +236,21 @@ export default function CustomizableDashboard() {
       try { setLogStats(await fetchLogStats('1h')); } catch {}
       try { setDbItems((await databaseService.list()).data.databases || []); } catch {}
 
-      // 获取 AI 最新洞察（接口不存在时静默降级）
+      // 获取 AI 最新洞察（10秒超时降级，接口不存在时静默降级）
       try {
-        const insightRes = await api.get('/ai/insights', { params: { limit: 1 } });
-        setAiInsight(insightRes.data.items?.[0] ?? null);
-      } catch {}
+        const aiTimeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('AI insight timeout')), 10000)
+        );
+        const insightRes = await Promise.race([
+          api.get('/ai/insights', { params: { limit: 1 } }),
+          aiTimeout,
+        ]);
+        setAiInsight((insightRes as any).data.items?.[0] ?? null);
+      } catch {
+        setAiInsight(null);
+      } finally {
+        setAiLoading(false);
+      }
     } catch (err) {
       setLoadError(err);
     } finally {
@@ -525,6 +536,7 @@ export default function CustomizableDashboard() {
         <div style={{ flex: 1 }}>
           <AIInsightBanner
             insight={aiInsight}
+            loading={aiLoading}
             onViewDetail={() => navigate('/ai/analysis')}
           />
         </div>

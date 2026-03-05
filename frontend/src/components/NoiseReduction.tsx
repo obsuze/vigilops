@@ -71,7 +71,10 @@ export default function NoiseReduction() {
 
   const originalCount = stats.total_alert_occurrences_24h;
   const afterCount = stats.active_alert_groups || groupsTotal;
-  const rate = stats.deduplication_rate_24h;
+  // 重新计算压缩率：(1 - 压缩后数量/压缩前数量) * 100，最大 99.9%
+  const rate = originalCount > 0
+    ? Math.min(99.9, Math.max(0, (1 - afterCount / originalCount) * 100))
+    : 0;
 
   // ── 降噪对比柱状图 ──
   const barOption = {
@@ -244,7 +247,7 @@ export default function NoiseReduction() {
           </Col>
           <Col>
             <Tag color="green" style={{ fontSize: 18, padding: '4px 16px', marginLeft: 16 }}>
-              压缩 {rate.toFixed(1)}%
+              从 {originalCount} 条聚合为 {afterCount} 组（压缩 {rate.toFixed(1)}%）
             </Tag>
           </Col>
         </Row>

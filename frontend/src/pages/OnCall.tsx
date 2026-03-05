@@ -142,7 +142,8 @@ export default function OnCall() {
       const start = calendarMonth.startOf('month').format('YYYY-MM-DD');
       const end = calendarMonth.endOf('month').format('YYYY-MM-DD');
       const { data } = await onCallService.getCoverage(start, end);
-      setCoverageData(data);
+      // 确保 schedules 字段始终是数组，防止 useMemo 崩溃
+      setCoverageData(data ? { ...data, schedules: Array.isArray(data.schedules) ? data.schedules : [] } : null);
     } catch { /* ignore */ } finally { setCoverageLoading(false); }
   }, [calendarMonth]);
 
@@ -257,7 +258,7 @@ export default function OnCall() {
   const schedulesByDate = useMemo(() => {
     if (!coverageData) return {};
     const map: Record<string, Array<{ username: string; group_name: string }>> = {};
-    for (const s of coverageData.schedules) {
+    for (const s of (coverageData.schedules ?? [])) {
       let cur = dayjs(s.start_date);
       const end = dayjs(s.end_date);
       while (cur.isBefore(end) || cur.isSame(end, 'day')) {

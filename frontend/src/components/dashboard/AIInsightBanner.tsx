@@ -17,10 +17,11 @@ export interface AIInsight {
 
 interface AIInsightBannerProps {
   insight: AIInsight | null;
+  loading?: boolean;
   onViewDetail: () => void;
 }
 
-export default function AIInsightBanner({ insight, onViewDetail }: AIInsightBannerProps) {
+export default function AIInsightBanner({ insight, loading = false, onViewDetail }: AIInsightBannerProps) {
   const { t } = useTranslation();
 
   return (
@@ -84,7 +85,7 @@ export default function AIInsightBanner({ insight, onViewDetail }: AIInsightBann
           <Text
             style={{
               fontSize: 15,
-              color: '#e8f4f8',
+              color: loading ? '#8ab4cc' : '#e8f4f8',
               fontWeight: 500,
               display: 'block',
               overflow: 'hidden',
@@ -95,7 +96,9 @@ export default function AIInsightBanner({ insight, onViewDetail }: AIInsightBann
               maxHeight: '3em',
             }}
           >
-            {insight?.conclusion ?? t('dashboard.aiAnalyzing')}
+            {loading
+              ? t('dashboard.aiAnalyzing')
+              : (insight?.conclusion ?? t('dashboard.aiNoData', '暂无 AI 洞察数据'))}
           </Text>
           <div
             style={{
