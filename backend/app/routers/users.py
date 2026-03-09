@@ -9,7 +9,7 @@
   - 特殊账号保护（demo 账号不可编辑删除）
   - 完整的审计日志记录（操作追踪）
 依赖关系：依赖 User 数据模型、审计服务和安全模块
-API端点：GET/POST/PUT/DELETE /api/v1/users, PUT /api/v1/users/{id}/password
+API端点：GET /me, GET/POST/PUT/DELETE /api/v1/users, PUT /api/v1/users/{id}/password
 
 Author: VigilOps Team
 """
@@ -20,13 +20,19 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import get_admin_user
+from app.core.deps import get_admin_user, get_current_user
 from app.core.security import hash_password
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate, UserOut, UserListResponse, PasswordReset
 from app.services.audit import log_audit
 
 router = APIRouter(prefix="/api/v1/users", tags=["users"])
+
+
+@router.get("/me", response_model=UserOut)
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """获取当前登录用户信息 (Get current logged-in user info)"""
+    return current_user
 
 
 @router.get("", response_model=UserListResponse)
