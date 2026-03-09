@@ -10,7 +10,7 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://github.com/LinChuang2008/vigilops)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-[Live Demo](https://demo.lchuangnet.com) · [Docs](#-documentation) · [中文](#-中文)
+[🌐 Website](https://demo.lchuangnet.com) · [🎯 Live Demo](https://demo.lchuangnet.com) · [Docs](#-documentation) · [中文](#-中文)
 
 </div>
 
@@ -59,6 +59,26 @@ The result: fewer alerts that wake you up, faster resolution when something real
 | 📝 `log_rotation` | Rotates and compresses oversized logs |
 | 💀 `zombie_killer` | Detects and terminates zombie processes |
 | 🔌 `connection_reset` | Resets stuck connections and connection pools |
+
+---
+
+## Screenshots
+
+<div align="center">
+
+**Dashboard — real-time metrics across all monitored hosts**
+![Dashboard](docs/screenshots/dashboard.jpg)
+
+**AI Alert Analysis — root cause, severity, and recommended action**
+![AI Analysis](docs/screenshots/ai-analysis.jpg)
+
+**Alert List — with AI-powered triage and auto-remediation status**
+![Alerts](docs/screenshots/alerts.jpg)
+
+**Service Topology — visualize dependencies and failure propagation**
+![Topology](docs/screenshots/topology.jpg)
+
+</div>
 
 ---
 
