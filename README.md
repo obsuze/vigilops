@@ -479,6 +479,31 @@ We believe in transparent positioning. Here's how VigilOps compares — includin
 | [Contributing](docs/contributing.md) | Dev environment + code standards |
 | [Changelog](docs/changelog.md) | Version history |
 
+## Developer Workflow
+
+For contributors and internal developers, use the following scripts to validate changes before pushing:
+
+```bash
+# 1. Start local environment
+docker compose up -d
+
+# 2. Verify all core APIs pass smoke tests
+bash scripts/test-local.sh
+
+# 3. If tests pass, push and deploy to ECS
+git push origin main
+bash scripts/deploy-ecs.sh
+```
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/test-local.sh` | Smoke-tests health, auth, hosts, alerts, dashboard, topology against local Docker |
+| `scripts/deploy-ecs.sh` | SSH to ECS, `git pull`, `docker compose build/up`, then verifies the remote health endpoint |
+
+> **Options**: Override defaults with env vars — e.g. `BASE_URL=http://localhost:8001 bash scripts/test-local.sh`
+
+---
+
 ## Contributing
 
 We welcome contributions — especially from people who experience alert fatigue firsthand.
@@ -795,6 +820,31 @@ MCP Server 使用 HTTP 模式（FastMCP + uvicorn）。在 Claude Desktop 配置
 - 🔴 生态有限 — 插件和集成还很少
 
 如果这些对你来说可以接受，欢迎试用并告诉我们你的反馈。每一位早期用户的声音都非常重要。
+
+### 开发者工作流
+
+贡献者和内部开发者请使用以下脚本，在推送前本地验证变更：
+
+```bash
+# 1. 启动本地环境
+docker compose up -d
+
+# 2. 跑核心接口冒烟测试
+bash scripts/test-local.sh
+
+# 3. 测试通过后推送并部署到 ECS
+git push origin main
+bash scripts/deploy-ecs.sh
+```
+
+| 脚本 | 作用 |
+|------|------|
+| `scripts/test-local.sh` | 对本地 Docker 环境跑健康/登录/hosts/alerts/dashboard/topology 冒烟测试 |
+| `scripts/deploy-ecs.sh` | SSH 到 ECS，执行 `git pull` + `docker compose build/up`，并验证远端健康接口 |
+
+> **自定义参数**：可通过环境变量覆盖默认值，例如：`BASE_URL=http://localhost:8001 bash scripts/test-local.sh`
+
+---
 
 ### 联系我们
 
