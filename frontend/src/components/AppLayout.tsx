@@ -41,6 +41,7 @@ import {
   ClusterOutlined,
   AppstoreOutlined,
 } from '@ant-design/icons';
+import QuickStartGuide from './QuickStartGuide';
 
 const { Header, Sider, Content } = Layout;
 
@@ -358,6 +359,8 @@ export default function AppLayout() {
           <Outlet />
         </Content>
       </Layout>
+      {/* 新手引导（首次登录时弹出） */}
+      <QuickStartGuide />
     </Layout>
   );
 }
