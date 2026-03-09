@@ -17,7 +17,19 @@ dependencies = [
 [project.optional-dependencies]
 postgres = ["psycopg2-binary>=2.9"]
 mysql = ["pymysql>=1.1"]
-db = ["psycopg2-binary>=2.9", "pymysql>=1.1"]
+oracle = ["oracledb>=2.0"]
+redis = ["redis>=4.0"]
+db = [
+    "psycopg2-binary>=2.9",
+    "pymysql>=1.1",
+    "oracledb>=2.0",
+    "redis>=4.0",
+]
 
 [project.scripts]
 vigilops-agent = "vigilops_agent.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+]

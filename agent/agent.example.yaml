@@ -14,3 +14,88 @@ services:
     type: http
     url: http://localhost:8080/health
     interval: 30s
+
+# ─────────────── 数据库监控配置 ───────────────
+databases:
+  # PostgreSQL 示例
+  - name: pg-main
+    type: postgres
+    host: 127.0.0.1
+    port: 5432
+    username: monitor
+    password: xxx
+    database: mydb
+    interval: 60s
+    connect_timeout: 10
+    connection_threshold: 0.8  # 超过 80% max_connections 时触发连接根因分析
+
+  # MySQL / MariaDB 示例
+  - name: mysql-prod
+    type: mysql
+    host: 127.0.0.1
+    port: 3306
+    username: monitor
+    password: xxx
+    database: information_schema
+    interval: 60s
+
+  # Oracle 直连示例（12c+，Thin 模式，无需 Instant Client）
+  - name: oracle-prod
+    type: oracle
+    connection_mode: direct   # direct | docker | auto
+    host: 192.168.1.100
+    port: 1521
+    username: monitor
+    password: xxx
+    service_name: ORCLPDB1    # 12c+ 推荐使用 service_name
+    # oracle_sid: ORCL        # 11g 使用 SID
+    interval: 60s
+
+  # Oracle 11g 裸机直连示例（Thick 模式，需 Instant Client）
+  - name: oracle-11g
+    type: oracle
+    connection_mode: direct
+    host: 192.168.1.101
+    port: 1521
+    username: monitor
+    password: xxx
+    oracle_sid: ORCL
+    oracle_home: /u01/app/oracle/product/11.2.0/client_1  # Instant Client 路径
+    interval: 60s
+
+  # Oracle docker exec 模式示例（兼容旧容器部署）
+  - name: oracle-docker
+    type: oracle
+    connection_mode: docker
+    container_name: oracle-db
+    oracle_sid: ORCL
+    oracle_home: /u01/app/oracle/product/19c/dbhome_1
+    interval: 60s
+
+  # Redis 单机示例
+  - name: redis-cache
+    type: redis
+    host: 127.0.0.1
+    port: 6379
+    password: xxx
+    redis_mode: single      # single | sentinel | cluster
+    interval: 30s
+
+  # Redis Sentinel 示例
+  - name: redis-sentinel
+    type: redis
+    host: 127.0.0.1
+    port: 26379
+    password: xxx
+    redis_mode: sentinel
+    sentinel_master: mymaster
+    interval: 30s
+
+  # Redis Cluster 示例
+  - name: redis-cluster
+    type: redis
+    host: 127.0.0.1
+    port: 7000
+    password: xxx
+    redis_mode: cluster
+    interval: 30s

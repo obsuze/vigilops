@@ -67,16 +67,28 @@ class DiscoveryConfig:
 class DatabaseMonitorConfig:
     """数据库监控配置。"""
     name: str = ""          # 显示名称
-    type: str = "postgres"  # 数据库类型：postgres / mysql / oracle
+    type: str = "postgres"  # 数据库类型：postgres / mysql / oracle / redis
     host: str = "localhost"
     port: int = 5432
     database: str = ""
     username: str = ""
     password: str = ""
     interval: int = 60      # 采集间隔（秒）
-    container_name: str = ""  # Docker 容器名（Oracle 场景使用）
-    oracle_sid: str = ""      # Oracle SID
-    oracle_home: str = ""     # ORACLE_HOME（可选，默认从 .bash_profile 读取）
+    connect_timeout: int = 10  # 连接超时（秒）
+
+    # Oracle 配置
+    connection_mode: str = "auto"  # direct | docker | auto（Oracle 专用，其他忽略）
+    container_name: str = ""       # Docker 容器名（oracle docker 模式使用）
+    oracle_sid: str = ""           # Oracle SID
+    oracle_home: str = ""          # ORACLE_HOME（可选，默认从 .bash_profile 读取）
+    service_name: str = ""         # Oracle service_name（12c+ 推荐，替代 SID）
+
+    # Redis 配置
+    redis_mode: str = "single"     # single | sentinel | cluster
+    sentinel_master: str = ""      # Sentinel 模式下的 master name
+
+    # 连接根因分析触发阈值（连接数占 max_connections 的比例）
+    connection_threshold: float = 0.8
 
 
 @dataclass
@@ -195,7 +207,11 @@ def load_config(path: str) -> AgentConfig:
     for db_conf in data.get("databases", []):
         db_type = db_conf.get("type", "postgres")
         # 根据数据库类型设置默认端口
-        default_port = 3306 if db_type == "mysql" else 5432
+        _default_ports = {
+            "mysql": 3306, "oracle": 1521,
+            "redis": 6379, "mssql": 1433, "mongodb": 27017,
+        }
+        default_port = _default_ports.get(db_type, 5432)
         dmc = DatabaseMonitorConfig(
             name=db_conf.get("name", ""),
             type=db_type,
@@ -205,9 +221,15 @@ def load_config(path: str) -> AgentConfig:
             username=db_conf.get("username", ""),
             password=db_conf.get("password", ""),
             interval=_parse_interval(db_conf.get("interval", 60)),
+            connect_timeout=db_conf.get("connect_timeout", 10),
+            connection_mode=db_conf.get("connection_mode", "auto"),
             container_name=db_conf.get("container_name", ""),
             oracle_sid=db_conf.get("oracle_sid", ""),
             oracle_home=db_conf.get("oracle_home", ""),
+            service_name=db_conf.get("service_name", ""),
+            redis_mode=db_conf.get("redis_mode", "single"),
+            sentinel_master=db_conf.get("sentinel_master", ""),
+            connection_threshold=db_conf.get("connection_threshold", 0.8),
         )
         cfg.databases.append(dmc)
 
