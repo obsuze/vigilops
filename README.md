@@ -10,7 +10,7 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](https://github.com/LinChuang2008/vigilops)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-[🌐 Website](https://demo.lchuangnet.com) · [🎯 Live Demo](https://demo.lchuangnet.com) · [Docs](#-documentation) · [中文](#-中文)
+[🌐 Website](https://www.lchuangnet.com) · [🎯 Live Demo](https://demo.lchuangnet.com) · [Docs](#-documentation) · [中文](#-中文)
 
 </div>
 
@@ -95,8 +95,8 @@ Open `http://localhost:3001`. That's it.
 
 **🎯 Don't want to install? Try the live demo:**
 
-> [https://demo.lchuangnet.com](https://demo.lchuangnet.com)
-> Login: `demo@vigilops.io` / `demo123` (read-only)
+> 🌐 **Official Website**: [www.lchuangnet.com](https://www.lchuangnet.com)
+> 🎯 **Live Demo**: [demo.lchuangnet.com](https://demo.lchuangnet.com) — Login: `demo@vigilops.io` / `demo123` (read-only)
 >
 > ⚠️ This is a single demo server — it may be slow or temporarily down. For real evaluation, self-host it.
 
