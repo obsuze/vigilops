@@ -20,7 +20,7 @@ from urllib.parse import urlencode
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
 
@@ -78,7 +78,18 @@ OAUTH_PROVIDERS = {
 }
 
 # CSRF state 存储（生产环境应使用 Redis 等分布式存储）
-_oauth_states: Dict[str, str] = {}
+# 使用 (state -> (provider, created_time)) 格式，支持过期清理
+import time as _time
+_OAUTH_STATE_TTL = 600  # 10 分钟过期
+_oauth_states: Dict[str, tuple] = {}
+
+
+def _cleanup_expired_states():
+    """清理过期的 OAuth state，防止内存泄漏"""
+    now = _time.time()
+    expired = [k for k, v in _oauth_states.items() if now - v[1] > _OAUTH_STATE_TTL]
+    for k in expired:
+        _oauth_states.pop(k, None)
 
 
 class LDAPLoginRequest(BaseModel):
@@ -119,8 +130,9 @@ async def oauth_login(provider: str, request: Request):
     callback_url = str(request.url_for("oauth_callback", provider=provider))
     
     # 生成随机 state 并临时保存，用于回调时的 CSRF 校验
+    _cleanup_expired_states()
     csrf_state = secrets.token_urlsafe(32)
-    _oauth_states[csrf_state] = provider
+    _oauth_states[csrf_state] = (provider, _time.time())
 
     params = {
         "client_id": provider_config["client_id"],
@@ -166,8 +178,12 @@ async def oauth_callback(
         raise HTTPException(status_code=400, detail=f"不支持的OAuth提供商: {provider}")
     
     # 验证 state 参数防 CSRF（校验随机 token 并立即消费，防止重放）
-    if not state or _oauth_states.pop(state, None) != provider:
+    state_entry = _oauth_states.pop(state, None) if state else None
+    if not state_entry or state_entry[0] != provider:
         raise HTTPException(status_code=400, detail="无效的状态参数")
+    # 检查 state 是否过期
+    if _time.time() - state_entry[1] > _OAUTH_STATE_TTL:
+        raise HTTPException(status_code=400, detail="授权状态已过期，请重新发起登录")
     
     provider_config = OAUTH_PROVIDERS[provider]
     
@@ -411,7 +427,7 @@ async def _find_or_create_oauth_user(db: AsyncSession, provider: str, user_info:
             email=email,
             name=user_info.get("name") or email.split("@")[0],
             hashed_password="oauth",  # OAuth用户不使用本地密码
-            role="admin" if user_count == 0 else "member",
+            role="admin" if user_count == 0 else "viewer",
             is_active=True
         )
         
@@ -431,12 +447,15 @@ async def _authenticate_ldap_user(email: str, password: str) -> Dict[str, Any]:
     ldap_use_tls = getattr(settings, "LDAP_USE_TLS", False)
     ldap_base_dn = getattr(settings, "LDAP_BASE_DN", "")
     ldap_user_search = getattr(settings, "LDAP_USER_SEARCH", "uid={}")
-    
+
     if not ldap_server:
         raise Exception("LDAP server not configured")
-    
+
+    # 防止 LDAP 注入：转义特殊字符
+    safe_email = ldap3.utils.conv.escape_filter_chars(email)
+
     # 构建用户DN
-    user_dn = f"{ldap_user_search.format(email)},{ldap_base_dn}"
+    user_dn = f"{ldap_user_search.format(safe_email)},{ldap_base_dn}"
     
     try:
         # 连接LDAP服务器
@@ -456,8 +475,8 @@ async def _authenticate_ldap_user(email: str, password: str) -> Dict[str, Any]:
             check_names=True
         )
         
-        # 搜索用户属性
-        search_filter = f"({ldap_user_search.format(email).split(',')[0]})"
+        # 搜索用户属性（使用已转义的 safe_email 防止 LDAP 注入）
+        search_filter = f"({ldap_user_search.format(safe_email).split(',')[0]})"
         connection.search(
             search_base=ldap_base_dn,
             search_filter=search_filter,
@@ -507,7 +526,6 @@ async def _find_or_create_ldap_user(db: AsyncSession, user_info: Dict[str, Any])
     else:
         # 创建新用户
         # 检查是否是第一个用户（自动设为管理员）
-        from sqlalchemy import func
         count_result = await db.execute(select(func.count(User.id)))
         user_count = count_result.scalar()
         
@@ -515,7 +533,7 @@ async def _find_or_create_ldap_user(db: AsyncSession, user_info: Dict[str, Any])
             email=email,
             name=user_info.get("name") or email.split("@")[0],
             hashed_password="ldap",  # LDAP用户不使用本地密码
-            role="admin" if user_count == 0 else "member",
+            role="admin" if user_count == 0 else "viewer",
             is_active=True
         )
         

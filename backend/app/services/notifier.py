@@ -100,34 +100,35 @@ def _validate_webhook_url(url: str) -> tuple[bool, str | None]:
     if not hostname:
         return False, "无法解析主机名"
 
-    # 禁止访问的内网地址列表
-    forbidden_patterns = [
-        "127.",           # Loopback
-        "localhost",      # Loopback
-        "0.0.0.0",        # All interfaces
-        "10.",            # Private Class A
-        "172.16.",        # Private Class B (start)
-        "172.17.",        # Private Class B
-        "172.18.",        # Private Class B
-        "172.19.",        # Private Class B
-        "172.20.",        # Private Class B
-        "172.21.",        # Private Class B
-        "172.22.",        # Private Class B
-        "172.23.",        # Private Class B
-        "172.24.",        # Private Class B
-        "172.25.",        # Private Class B
-        "172.26.",        # Private Class B
-        "172.27.",        # Private Class B
-        "172.28.",        # Private Class B
-        "172.29.",        # Private Class B
-        "172.30.",        # Private Class B
-        "172.31.",        # Private Class B
-        "192.168.",       # Private Class C
-    ]
+    # 使用 ipaddress 模块进行精确的私有/保留地址检测
+    import ipaddress
+    import socket
 
-    for pattern in forbidden_patterns:
-        if hostname.startswith(pattern) or hostname == pattern.replace(".", ""):
-            return False, f"禁止访问内网地址: {hostname}"
+    # 先检查字符串匹配的已知危险主机名
+    if hostname in ("localhost", "metadata.google.internal"):
+        return False, f"禁止访问内网地址: {hostname}"
+
+    # 尝试将主机名解析为 IP 地址进行精确验证
+    try:
+        resolved_ips = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        for family, _, _, _, addr_tuple in resolved_ips:
+            ip = ipaddress.ip_address(addr_tuple[0])
+            if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_link_local:
+                return False, f"禁止访问内网地址: {hostname} (解析为 {ip})"
+            # 阻止云元数据端点 169.254.169.254
+            if str(ip) == "169.254.169.254":
+                return False, f"禁止访问云元数据端点: {hostname}"
+    except (socket.gaierror, ValueError):
+        # 无法解析的主机名，使用字符串模式回退检查
+        forbidden_patterns = [
+            "127.", "0.0.0.0", "10.", "192.168.", "169.254.",
+            "::1", "fc00:", "fd00:", "fe80:",
+        ]
+        for i in range(16, 32):
+            forbidden_patterns.append(f"172.{i}.")
+        for pattern in forbidden_patterns:
+            if hostname.startswith(pattern):
+                return False, f"禁止访问内网地址: {hostname}"
 
     # 4. 白名单检查（生产环境）
     if settings.environment.lower() == "production" and settings.webhook_allowed_domains:
