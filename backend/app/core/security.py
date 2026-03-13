@@ -8,6 +8,7 @@ Provides security functions for the VigilOps platform, including password hashin
 and JWT token generation/parsing. Uses industry-standard bcrypt algorithm for password
 encryption and JWT for user authentication and session management.
 """
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -77,8 +78,8 @@ def create_access_token(subject: str) -> str:
     """
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
     return jwt.encode(
-        {"sub": subject, "exp": expire, "type": "access"}, 
-        settings.jwt_secret_key, 
+        {"sub": subject, "exp": expire, "type": "access", "jti": uuid.uuid4().hex},
+        settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm
     )
 
@@ -102,8 +103,8 @@ def create_refresh_token(subject: str) -> str:
     """
     expire = datetime.now(timezone.utc) + timedelta(days=settings.jwt_refresh_token_expire_days)
     return jwt.encode(
-        {"sub": subject, "exp": expire, "type": "refresh"}, 
-        settings.jwt_secret_key, 
+        {"sub": subject, "exp": expire, "type": "refresh", "jti": uuid.uuid4().hex},
+        settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm
     )
 

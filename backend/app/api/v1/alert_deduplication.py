@@ -154,15 +154,13 @@ async def get_deduplication_statistics(
             select(func.count(AlertGroup.id)).where(AlertGroup.status.in_(["firing", "acknowledged"]))
         )).scalar() or 0
 
-        total_occurrences = (await db.execute(
-            select(func.count(AlertDeduplication.id)).where(AlertDeduplication.last_occurrence > yesterday)
-        )).scalar() or 0
-
-        # Get suppressed count
+        # Get total occurrences (sum of all occurrence_count) and suppressed count
         dedup_result = await db.execute(
             select(AlertDeduplication.occurrence_count).where(AlertDeduplication.last_occurrence > yesterday)
         )
-        suppressed_occurrences = sum(max(0, row[0] - 1) for row in dedup_result)
+        rows = [row[0] for row in dedup_result]
+        total_occurrences = sum(rows)
+        suppressed_occurrences = sum(max(0, count - 1) for count in rows)
 
         dedup_rate = (suppressed_occurrences / total_occurrences * 100) if total_occurrences > 0 else 0
 

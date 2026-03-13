@@ -36,6 +36,7 @@ from app.models.host_metric import HostMetric
 from app.models.service import Service
 from app.models.alert import Alert
 from app.models.log_entry import LogEntry
+from app.models.notification import NotificationChannel
 
 logger = logging.getLogger(__name__)
 
@@ -100,13 +101,23 @@ async def _collect_dashboard_data() -> dict:
 
         # === 告警统计 (Alert Statistics) ===
         # 最近1小时新产生的告警数
-        alert_count = (await db.execute(
+        recent_alert_count = (await db.execute(
             select(func.count(Alert.id)).where(Alert.fired_at >= since)
         )).scalar() or 0
 
         # 当前正在触发的告警数
         firing_count = (await db.execute(
             select(func.count(Alert.id)).where(Alert.status == "firing")
+        )).scalar() or 0
+
+        # 所有活跃告警总数（firing + acknowledged）
+        active_alert_total = (await db.execute(
+            select(func.count(Alert.id)).where(Alert.status.in_(["firing", "acknowledged"]))
+        )).scalar() or 0
+
+        # === 通知渠道状态 (Notification Channel Status) ===
+        enabled_channels = (await db.execute(
+            select(func.count(NotificationChannel.id)).where(NotificationChannel.is_enabled == True)
         )).scalar() or 0
 
         # === 日志统计 (Log Statistics) ===
@@ -175,11 +186,11 @@ async def _collect_dashboard_data() -> dict:
                 "down": svc_down,
             },
             "alerts": {
-                "total": alert_count,      # 最近1小时新告警
-                "firing": firing_count,    # 当前活跃告警
+                "total": active_alert_total,  # 所有活跃告警（firing + acknowledged）
+                "firing": firing_count,       # 当前触发中的告警
             },
             "recent_1h": {
-                "alert_count": alert_count,       # 最近1小时告警数
+                "alert_count": recent_alert_count,  # 最近1小时新告警数
                 "error_log_count": error_log_count,  # 最近1小时错误日志数
             },
             "avg_usage": {
@@ -188,6 +199,10 @@ async def _collect_dashboard_data() -> dict:
                 "disk_percent": avg_disk,    # 平均磁盘使用率
             },
             "health_score": health_score,    # 综合健康评分(0-100)
+            "notification_setup": {
+                "configured": enabled_channels > 0,
+                "enabled_count": enabled_channels,
+            },
         }
 
 
