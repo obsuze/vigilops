@@ -2,6 +2,7 @@
  * 最新告警列表组件
  * 无告警时，若存在 FATAL/ERROR 日志则显示联动告警 Banner
  */
+import { memo } from 'react';
 import { Card, Table, Tag, Alert, Button, Space } from 'antd';
 import { WarningFilled } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +24,7 @@ interface AlertsListProps {
   onViewLogs?: () => void;
 }
 
-export default function AlertsList({
+export default memo(function AlertsList({
   alerts,
   fatalCount = 0,
   errorCount = 0,
@@ -111,4 +112,4 @@ export default function AlertsList({
       )}
     </Card>
   );
-}
+})

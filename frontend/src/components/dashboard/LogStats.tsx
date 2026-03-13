@@ -2,6 +2,7 @@
  * 日志统计组件
  * FATAL/ERROR 行红色背景 + AI 分析 CTA，WARN/INFO/DEBUG 正常展示
  */
+import { memo } from 'react';
 import { Card, Row, Col, Statistic, Button, Space, Typography } from 'antd';
 import { ExclamationCircleFilled } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +16,7 @@ interface LogStatsProps {
   onAIAnalyze?: () => void;
 }
 
-export default function LogStats({ logStats, onAIAnalyze }: LogStatsProps) {
+export default memo(function LogStats({ logStats, onAIAnalyze }: LogStatsProps) {
   const { t } = useTranslation();
 
   if (!logStats || logStats.by_level.length === 0) {
@@ -141,4 +142,4 @@ export default function LogStats({ logStats, onAIAnalyze }: LogStatsProps) {
       </Row>
     </Card>
   );
-}
+})

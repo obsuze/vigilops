@@ -2,6 +2,7 @@
  * 健康评分仪表盘组件
  * 大号 ECharts gauge，三段渐变弧（0-60绿/60-80黄/80-100红），下方 Top3 扣分项
  */
+import { memo } from 'react';
 import { Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
 import ReactECharts from '../ThemedECharts';
@@ -24,7 +25,7 @@ function getScoreColor(s: number): string {
   return '#ff4d4f';
 }
 
-export default function HealthScoreGauge({ score, breakdown }: HealthScoreGaugeProps) {
+export default memo(function HealthScoreGauge({ score, breakdown }: HealthScoreGaugeProps) {
   const { t } = useTranslation();
   const scoreColor = getScoreColor(score);
 
@@ -132,4 +133,4 @@ export default function HealthScoreGauge({ score, breakdown }: HealthScoreGaugeP
       )}
     </div>
   );
-}
+})
