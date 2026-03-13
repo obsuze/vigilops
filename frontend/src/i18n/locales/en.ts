@@ -1325,6 +1325,43 @@ const en = {
     until: 'Silenced until',
     noRule: 'No associated rule found',
   },
+
+  // ========== Landing Page ==========
+  landing: {
+    signIn: 'Sign In',
+    heroTag: 'AI-Powered Intelligent Operations',
+    heroTitle: 'Let AI Guard Your Infrastructure',
+    heroDescription: 'VigilOps is an AI-powered infrastructure monitoring platform with intelligent alert analysis, automated remediation, and MCP integration for DevOps teams.',
+    getStarted: 'Get Started',
+    viewDocs: 'View Docs',
+    featuresTitle: 'Core Features',
+    featuresSubtitle: 'Three core capabilities covering monitoring, analysis, and remediation',
+    feature1Title: 'AI-Powered Analysis',
+    feature1Desc: 'LLM-based root cause analysis with automatic context correlation and actionable remediation suggestions, reducing MTTR by 70%.',
+    feature2Title: 'Auto-Remediation',
+    feature2Desc: 'Built-in remediation playbook engine with one-click and automated repair workflows. Alerts trigger fixes instantly without human intervention.',
+    feature3Title: 'MCP Integration',
+    feature3Desc: 'Native Model Context Protocol support for seamless collaboration with AI tools like Claude and Cursor. Manage operations using natural language.',
+    stat1: 'First Load',
+    stat2: 'AI Accuracy',
+    stat3: 'MTTR Reduction',
+    stat4: '24/7 Monitoring',
+    comparisonTitle: 'How We Compare',
+    comparisonSubtitle: 'Feature comparison with mainstream monitoring solutions',
+    comparison: {
+      feature: 'Feature',
+      aiAnalysis: 'AI-Powered Analysis',
+      autoRemediation: 'Auto-Remediation',
+      mcpIntegration: 'MCP Integration',
+      topologyVisualization: 'Topology Visualization',
+      slaManagement: 'SLA Management',
+      selfHosted: 'Self-Hosted',
+      openSource: 'Open Source',
+    },
+    ctaTitle: 'Ready to Get Started?',
+    ctaDescription: 'Deploy for free and launch your AI operations platform in minutes.',
+    footer: 'Open Source AI Operations Monitoring Platform',
+  },
 };
 
 export default en;

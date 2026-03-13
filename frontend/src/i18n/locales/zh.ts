@@ -1325,6 +1325,43 @@ const zh = {
     until: '静默至',
     noRule: '未关联规则，无法静默',
   },
+
+  // ========== Landing Page ==========
+  landing: {
+    signIn: '登录',
+    heroTag: 'AI 驱动的智能运维',
+    heroTitle: '让 AI 守护你的基础设施',
+    heroDescription: 'VigilOps 是一款 AI 驱动的基础设施监控平台，提供智能告警分析、自动修复和 MCP 集成，让运维团队专注于创造价值。',
+    getStarted: '开始体验',
+    viewDocs: '查看文档',
+    featuresTitle: '核心特性',
+    featuresSubtitle: '三大核心能力，覆盖监控、分析、修复全流程',
+    feature1Title: 'AI 智能分析',
+    feature1Desc: '基于大语言模型的告警根因分析，自动关联上下文，提供可执行的修复建议，将 MTTR 缩短 70%。',
+    feature2Title: '自动修复',
+    feature2Desc: '内置修复剧本引擎，支持一键修复和自动化修复流程，告警触发即修复，无需人工介入。',
+    feature3Title: 'MCP 集成',
+    feature3Desc: '原生支持 Model Context Protocol，与 Claude、Cursor 等 AI 工具无缝协作，用自然语言操控运维。',
+    stat1: '首屏加载',
+    stat2: 'AI 分析准确率',
+    stat3: 'MTTR 缩短',
+    stat4: '全天候监控',
+    comparisonTitle: '竞品对比',
+    comparisonSubtitle: '与主流监控方案的功能对比',
+    comparison: {
+      feature: '功能',
+      aiAnalysis: 'AI 智能分析',
+      autoRemediation: '自动修复',
+      mcpIntegration: 'MCP 集成',
+      topologyVisualization: '拓扑可视化',
+      slaManagement: 'SLA 管理',
+      selfHosted: '私有部署',
+      openSource: '开源',
+    },
+    ctaTitle: '准备好开始了吗？',
+    ctaDescription: '免费部署，几分钟内启动你的 AI 运维平台。',
+    footer: '开源 AI 运维监控平台',
+  },
 };
 
 export default zh;

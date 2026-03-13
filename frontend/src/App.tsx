@@ -14,6 +14,7 @@ import AppLayout from './components/AppLayout';
 import AuthGuard from './components/AuthGuard';
 import ErrorBoundary from './components/ErrorBoundary';
 import Login from './pages/Login';
+import Landing from './pages/Landing';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const HostList = lazy(() => import('./pages/HostList'));
@@ -43,7 +44,7 @@ const AlertEscalation = lazy(() => import('./pages/AlertEscalation'));
 const OnCall = lazy(() => import('./pages/OnCall'));
 
 /** 路由权限守卫：根据角色限制可访问的页面 */
-const viewerAllowedPrefixes = ['/', '/hosts', '/servers', '/services', '/topology', '/logs', '/databases', '/alerts', '/ai-analysis', '/remediations', '/multi-server', '/service-groups', '/on-call', '/sla'];
+const viewerAllowedPrefixes = ['/', '/dashboard', '/hosts', '/servers', '/services', '/topology', '/logs', '/databases', '/alerts', '/ai-analysis', '/remediations', '/multi-server', '/service-groups', '/on-call', '/sla', '/landing'];
 function RoleGuard({ children }: { children: React.ReactElement }) {
   const location = useLocation();
   const role = localStorage.getItem('user_role') || 'viewer';
@@ -56,6 +57,12 @@ function RoleGuard({ children }: { children: React.ReactElement }) {
     if (path.startsWith('/users') || path.startsWith('/settings')) return <Navigate to="/" replace />;
   }
   return children;
+}
+
+/** 首页入口：已登录用户进 Dashboard，未登录用户跳转 Landing */
+function HomeRedirect() {
+  const isLoggedIn = !!localStorage.getItem('user_name');
+  return <Navigate to={isLoggedIn ? '/dashboard' : '/landing'} replace />;
 }
 
 const antdLocaleMap: Record<string, typeof zhCN> = { zh: zhCN, en: enUS };
@@ -80,8 +87,12 @@ function AppInner() {
         <BrowserRouter>
           <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><Spin size="large" /></div>}>
           <Routes>
+            {/* Landing Page（无需认证） */}
+            <Route path="/landing" element={<Landing />} />
             {/* 登录页（无需认证） */}
             <Route path="/login" element={<Login />} />
+            {/* 首页入口：未登录→Landing，已登录→Dashboard */}
+            <Route path="/" element={<HomeRedirect />} />
             {/* 需要认证的路由，统一使用 AppLayout 布局 */}
             <Route
               element={
@@ -92,7 +103,7 @@ function AppInner() {
                 </AuthGuard>
               }
             >
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/hosts" element={<HostList />} />
               <Route path="/hosts/:id" element={<HostDetail />} />
               <Route path="/services" element={<ServiceList />} />

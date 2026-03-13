@@ -79,7 +79,7 @@ function buildMenuItems(t: (key: string) => string) {
       type: 'group' as const,
       label: t('menu.groupMonitoring'),
       children: [
-        { key: '/', icon: <DashboardOutlined />, label: t('menu.dashboard') },
+        { key: '/dashboard', icon: <DashboardOutlined />, label: t('menu.dashboard') },
         { key: '/hosts', icon: <CloudServerOutlined />, label: t('menu.hosts') },
         { key: '/services', icon: <ApiOutlined />, label: t('menu.services') },
         { key: '/topology', icon: <DeploymentUnitOutlined />, label: t('menu.topologyService') },
@@ -219,7 +219,7 @@ export default function AppLayout() {
     // 按 key 长度倒序排列，确保最长匹配优先（/topology/servers 优先于 /topology）
     allKeys.sort((a, b) => b.length - a.length);
     const matched = allKeys.find(k => path.startsWith(k));
-    return matched || '/';
+    return matched || '/dashboard';
   };
   const selectedKey = findSelectedKey();
   const openKey = allFlatItems.find(
