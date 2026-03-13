@@ -37,8 +37,12 @@ registering, storing and matching various remediation scripts.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
-from .models import Diagnosis, RemediationAlert, RunbookDefinition
+from .models import Diagnosis, RemediationAlert, RiskLevel, RunbookDefinition, RunbookStep
+
+if TYPE_CHECKING:
+    from app.models.custom_runbook import CustomRunbook
 
 logger = logging.getLogger(__name__)
 
@@ -303,7 +307,7 @@ class RunbookRegistry:
         alert_text = f"{alert.message} {alert.alert_type}".lower()
         
         matches = []  # 存储匹配的 Runbook 列表 (Store matched Runbook list)
-        
+
         # 遍历所有注册的 Runbook (Iterate through all registered Runbooks)
         for runbook in self._runbooks.values():
             # 检查该 Runbook 的所有关键词 (Check all keywords of this Runbook)
@@ -311,5 +315,37 @@ class RunbookRegistry:
                 if keyword.lower() in alert_text:  # 关键词匹配成功 (Keyword match successful)
                     matches.append(runbook)
                     break  # 找到一个匹配就足够了，避免重复添加 (One match is enough, avoid duplicate addition)
-                    
+
         return matches  # 返回所有匹配的 Runbook (Return all matched Runbooks)
+
+    def register_custom(self, custom_runbook: "CustomRunbook") -> None:
+        """从数据库记录注册自定义 Runbook (Register Custom Runbook from DB Record)
+
+        将 CustomRunbook ORM 实例转换为 RunbookDefinition 并注册。
+        """
+        risk_map = {
+            "auto": RiskLevel.AUTO,
+            "confirm": RiskLevel.CONFIRM,
+            "manual": RiskLevel.CONFIRM,
+            "block": RiskLevel.BLOCK,
+        }
+        steps = []
+        for step in (custom_runbook.steps or []):
+            steps.append(RunbookStep(
+                description=step.get("name", ""),
+                command=step.get("command", ""),
+                timeout_seconds=step.get("timeout_sec", 30),
+            ))
+
+        definition = RunbookDefinition(
+            name=f"custom:{custom_runbook.name}",
+            description=custom_runbook.description or "",
+            match_alert_types=[],
+            match_keywords=custom_runbook.trigger_keywords or [],
+            risk_level=risk_map.get(custom_runbook.risk_level, RiskLevel.CONFIRM),
+            commands=steps,
+            verify_commands=[],
+            cooldown_seconds=300,
+        )
+        self.register(definition)
+        logger.info("Registered custom runbook: %s (id=%s)", custom_runbook.name, custom_runbook.id)

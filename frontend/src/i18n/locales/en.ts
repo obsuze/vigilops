@@ -132,6 +132,7 @@ const en = {
     alertEscalation: 'Alert Escalation',
     onCall: 'On-Call',
     remediation: 'Remediation',
+    runbooks: 'Runbook Manager',
     sla: 'SLA',
     aiAnalysis: 'AI Analysis',
     reports: 'Reports',
@@ -153,6 +154,7 @@ const en = {
     darkMode: 'Switch to Dark Mode',
     logout: 'Logout',
     language: 'Language',
+    restartTour: 'Restart Tour',
   },
 
   // ========== Dashboard ==========

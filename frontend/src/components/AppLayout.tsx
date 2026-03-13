@@ -35,18 +35,21 @@ import {
   DeploymentUnitOutlined,
   SafetyCertificateOutlined,
   ThunderboltOutlined,
+  BookOutlined,
   ScheduleOutlined,
   RiseOutlined,
   GlobalOutlined,
   ClusterOutlined,
   AppstoreOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons';
 import QuickStartGuide from './QuickStartGuide';
+import GuidedTour, { useTourControl } from './GuidedTour';
 
 const { Header, Sider, Content } = Layout;
 
 /** viewer 可见的菜单 key */
-const viewerKeys = new Set(['/', '/hosts', '/servers', '/services', '/topology', '/topology/servers', '/topology/service-groups', '/logs', '/databases', '/alerts', '/ai-analysis', '/remediations', '/multi-server', '/service-groups', '/on-call', '/sla']);
+const viewerKeys = new Set(['/', '/hosts', '/servers', '/services', '/topology', '/topology/servers', '/topology/service-groups', '/logs', '/databases', '/alerts', '/ai-analysis', '/remediations', '/runbooks', '/multi-server', '/service-groups', '/on-call', '/sla']);
 /** member 隐藏的菜单 key */
 const memberHiddenKeys = new Set(['/users', '/settings']);
 
@@ -79,8 +82,8 @@ function buildMenuItems(t: (key: string) => string) {
       type: 'group' as const,
       label: t('menu.groupMonitoring'),
       children: [
-        { key: '/dashboard', icon: <DashboardOutlined />, label: t('menu.dashboard') },
-        { key: '/hosts', icon: <CloudServerOutlined />, label: t('menu.hosts') },
+        { key: '/dashboard', icon: <DashboardOutlined />, label: <span data-tour="dashboard">{t('menu.dashboard')}</span> },
+        { key: '/hosts', icon: <CloudServerOutlined />, label: <span data-tour="hosts">{t('menu.hosts')}</span> },
         { key: '/services', icon: <ApiOutlined />, label: t('menu.services') },
         { key: '/topology', icon: <DeploymentUnitOutlined />, label: t('menu.topologyService') },
         { key: '/topology/servers', icon: <ClusterOutlined />, label: t('menu.topologyServers') },
@@ -93,7 +96,7 @@ function buildMenuItems(t: (key: string) => string) {
       type: 'group' as const,
       label: t('menu.groupAlerts'),
       children: [
-        { key: '/alerts', icon: <AlertOutlined />, label: t('menu.alerts') },
+        { key: '/alerts', icon: <AlertOutlined />, label: <span data-tour="alerts">{t('menu.alerts')}</span> },
         { key: '/alert-escalation', icon: <RiseOutlined />, label: t('menu.alertEscalation') },
         { key: '/on-call', icon: <ScheduleOutlined />, label: t('menu.onCall') },
         { key: '/sla', icon: <SafetyCertificateOutlined />, label: t('menu.sla') },
@@ -103,8 +106,9 @@ function buildMenuItems(t: (key: string) => string) {
       type: 'group' as const,
       label: t('menu.groupAnalysis'),
       children: [
-        { key: '/ai-analysis', icon: <RobotOutlined />, label: t('menu.aiAnalysis') },
-        { key: '/remediations', icon: <ThunderboltOutlined />, label: t('menu.remediation') },
+        { key: '/ai-analysis', icon: <RobotOutlined />, label: <span data-tour="ai-analysis">{t('menu.aiAnalysis')}</span> },
+        { key: '/remediations', icon: <ThunderboltOutlined />, label: <span data-tour="remediation">{t('menu.remediation')}</span> },
+        { key: '/runbooks', icon: <BookOutlined />, label: t('menu.runbooks') },
         { key: '/reports', icon: <FileSearchOutlined />, label: t('menu.reports') },
       ],
     },
@@ -143,6 +147,7 @@ export default function AppLayout() {
   const { isDark, toggleTheme } = useTheme();
   const { t, i18n } = useTranslation();
   const { isMobile } = useResponsive();
+  const { tourOpen, closeTour, restartTour } = useTourControl();
 
   /** 动态生成菜单 */
   const allMenuItems = buildMenuItems(t);
@@ -327,6 +332,8 @@ export default function AppLayout() {
             />
             <Dropdown menu={{
               items: [
+                { key: 'restart-tour', icon: <QuestionCircleOutlined />, label: t('header.restartTour'), onClick: restartTour },
+                { type: 'divider' as const },
                 { key: 'logout', icon: <LogoutOutlined />, label: t('header.logout'), onClick: handleLogout },
               ],
             }}>
@@ -350,6 +357,8 @@ export default function AppLayout() {
       </Layout>
       {/* 新手引导（首次登录时弹出） */}
       <QuickStartGuide />
+      {/* 步骤式引导 Tour */}
+      <GuidedTour open={tourOpen} onClose={closeTour} />
     </Layout>
   );
 }

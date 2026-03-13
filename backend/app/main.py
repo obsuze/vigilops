@@ -34,6 +34,7 @@ from app.core.redis import get_redis, close_redis
 # 导入所有模型以确保 SQLAlchemy 表注册 (Import all models to ensure SQLAlchemy table registration)
 from app.models import User, AgentToken, Host, HostMetric, Service, ServiceCheck, Alert, AlertRule, NotificationChannel, NotificationLog, NotificationTemplate, LogEntry, MonitoredDatabase, DbMetric, AIInsight, AuditLog, Report, ServiceDependency, SLARule, SLAViolation  # noqa: F401
 from app.models.alert_group import AlertGroup, AlertDeduplication  # noqa: F401
+from app.models.custom_runbook import CustomRunbook  # noqa: F401
 # 导入所有路由模块 (Import all router modules)
 from app.routers import auth
 from app.routers import agent_tokens
@@ -65,6 +66,7 @@ from app.routers import dashboard_config
 from app.routers import prometheus
 from app.routers import external_auth
 from app.routers import ai_feedback
+from app.routers import custom_runbooks
 from app.api.v1 import data_retention
 from app.api.v1 import alert_deduplication
 
@@ -284,6 +286,7 @@ app.include_router(data_retention.router, prefix="/api/v1/data-retention", tags=
 app.include_router(alert_deduplication.router, prefix="/api/v1/alert-deduplication", tags=["告警去重"])  # 告警去重和聚合 (Alert deduplication and aggregation)
 app.include_router(prometheus.router)  # Prometheus 兼容性 (Prometheus compatibility)
 app.include_router(external_auth.router)  # 外部认证 (External Authentication)
+app.include_router(custom_runbooks.router)  # 自定义 Runbook 管理 (Custom Runbook Management)
 
 
 @app.get("/health")

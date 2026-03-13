@@ -132,6 +132,7 @@ const zh = {
     alertEscalation: '告警升级',
     onCall: '值班排期',
     remediation: '自动修复',
+    runbooks: 'Runbook 管理',
     sla: 'SLA 管理',
     aiAnalysis: 'AI 分析',
     reports: '运维报告',
@@ -153,6 +154,7 @@ const zh = {
     darkMode: '切换暗色模式',
     logout: '退出登录',
     language: '语言',
+    restartTour: '重新引导',
   },
 
   // ========== 仪表盘 ==========

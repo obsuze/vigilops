@@ -40,11 +40,12 @@ const ServiceGroupsPage = lazy(() => import('./pages/topology/ServiceGroupsPage'
 const SLA = lazy(() => import('./pages/SLA'));
 const RemediationList = lazy(() => import('./pages/Remediation'));
 const RemediationDetail = lazy(() => import('./pages/RemediationDetail'));
+const RunbookManagement = lazy(() => import('./pages/RunbookManagement'));
 const AlertEscalation = lazy(() => import('./pages/AlertEscalation'));
 const OnCall = lazy(() => import('./pages/OnCall'));
 
 /** 路由权限守卫：根据角色限制可访问的页面 */
-const viewerAllowedPrefixes = ['/', '/dashboard', '/hosts', '/servers', '/services', '/topology', '/logs', '/databases', '/alerts', '/ai-analysis', '/remediations', '/multi-server', '/service-groups', '/on-call', '/sla', '/landing'];
+const viewerAllowedPrefixes = ['/', '/dashboard', '/hosts', '/servers', '/services', '/topology', '/logs', '/databases', '/alerts', '/ai-analysis', '/remediations', '/runbooks', '/multi-server', '/service-groups', '/on-call', '/sla', '/landing'];
 function RoleGuard({ children }: { children: React.ReactElement }) {
   const location = useLocation();
   const role = localStorage.getItem('user_role') || 'viewer';
@@ -118,6 +119,7 @@ function AppInner() {
               <Route path="/alerts" element={<AlertList />} />
               <Route path="/remediations" element={<RemediationList />} />
               <Route path="/remediations/:id" element={<RemediationDetail />} />
+              <Route path="/runbooks" element={<RunbookManagement />} />
               <Route path="/sla" element={<SLA />} />
               <Route path="/ai-analysis" element={<AIAnalysis />} />
               <Route path="/reports" element={<Reports />} />
