@@ -67,6 +67,7 @@ from app.routers import prometheus
 from app.routers import external_auth
 from app.routers import ai_feedback
 from app.routers import custom_runbooks
+from app.routers import promql
 from app.api.v1 import data_retention
 from app.api.v1 import alert_deduplication
 
@@ -290,6 +291,7 @@ app.include_router(alert_deduplication.router, prefix="/api/v1/alert-deduplicati
 app.include_router(prometheus.router)  # Prometheus 兼容性 (Prometheus compatibility)
 app.include_router(external_auth.router)  # 外部认证 (External Authentication)
 app.include_router(custom_runbooks.router)  # 自定义 Runbook 管理 (Custom Runbook Management)
+app.include_router(promql.router)  # PromQL 查询 (PromQL Query Engine)
 
 
 @app.get("/health")
