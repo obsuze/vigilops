@@ -29,6 +29,7 @@ class AgentReporter:
         self.host_id: Optional[int] = None
         self._client: Optional[httpx.AsyncClient] = None
         self._service_ids: Dict[str, int] = {}  # 服务名 -> 服务端分配的 service_id
+        self._manual_service_names: set = set()  # 手动配置的服务名（不参与自动移除检测）
 
     def _headers(self) -> dict:
         """构造 API 请求认证头。"""
@@ -55,7 +56,7 @@ class AgentReporter:
 
         返回格式：
         {
-            "private_ip": "10.0.1.123",      # 主要内网 IP
+            "private_ip": "10.0.1.123",      # 主要内网 IP（路由可达）
             "public_ip": "54.255.123.45",     # 公网 IP（如果可检测）
             "all_private": ["10.0.1.123"],    # 所有内网 IP
             "all_public": ["54.255.123.45"],  # 所有公网 IP
@@ -65,7 +66,6 @@ class AgentReporter:
         }
         """
         import socket
-        import platform
 
         result = {
             "private_ip": None,
@@ -75,26 +75,25 @@ class AgentReporter:
             "interfaces": {},
         }
 
-        # 1. 尝试通过外部服务获取公网 IP
-        for url in [
-            "https://api.ipify.org",
-            "https://ifconfig.me/ip",
-            "https://checkip.amazonaws.com",
-        ]:
-            try:
-                import urllib.request
-                with urllib.request.urlopen(url, timeout=3) as resp:
-                    ip = resp.read().decode().strip()
-                    if ip and self._is_valid_public_ip(ip):
-                        result["public_ip"] = ip
-                        result["all_public"].append(ip)
-                        break
-            except Exception:
-                continue
-
-        # 2. 获取本地网络接口信息
+        # 1. 通过 socket 连接到服务端确定本机实际通信 IP（最可靠）
         try:
-            # 尝试使用 netifaces 获取详细信息
+            from urllib.parse import urlparse
+            parsed = urlparse(self.config.server.url)
+            host = parsed.hostname or "10.211.55.2"
+            port = parsed.port or 80
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect((host, port))
+                ip = s.getsockname()[0]
+            if ip and self._is_valid_ip(ip):
+                ip_type = self._classify_ip(ip)
+                result["private_ip"] = ip
+                result["all_private"].append(ip)
+                result["interfaces"]["default"] = {"ipv4": ip, "type": ip_type}
+        except Exception:
+            pass
+
+        # 2. 获取本地所有网络接口信息（补充，不覆盖 private_ip）
+        try:
             import netifaces
             for interface in netifaces.interfaces():
                 addrs = netifaces.ifaddresses(interface)
@@ -108,34 +107,31 @@ class AgentReporter:
                                 "type": ip_type
                             }
                             if ip_type == "private":
-                                if not result["private_ip"]:
-                                    result["private_ip"] = ip
                                 if ip not in result["all_private"]:
                                     result["all_private"].append(ip)
                             elif ip_type == "public":
                                 if ip not in result["all_public"]:
                                     result["all_public"].append(ip)
         except ImportError:
-            # netifaces 不可用，使用备用方法
             pass
 
-        # 3. 备用方法：通过 socket 获取主要 IP
-        if not result["private_ip"]:
+        # 3. 尝试通过外部服务获取公网 IP
+        for url in [
+            "https://api.ipify.org",
+            "https://ifconfig.me/ip",
+            "https://checkip.amazonaws.com",
+        ]:
             try:
-                from urllib.parse import urlparse
-                parsed = urlparse(self.config.server.url)
-                host = parsed.hostname or "10.211.55.2"
-                port = parsed.port or 80
-                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                    s.connect((host, port))
-                    ip = s.getsockname()[0]
-                if ip and self._is_valid_ip(ip):
-                    ip_type = self._classify_ip(ip)
-                    result["private_ip"] = ip
-                    result["all_private"].append(ip)
-                    result["interfaces"]["default"] = {"ipv4": ip, "type": ip_type}
+                import urllib.request
+                with urllib.request.urlopen(url, timeout=3) as resp:
+                    ip = resp.read().decode().strip()
+                    if ip and self._is_valid_public_ip(ip):
+                        result["public_ip"] = ip
+                        if ip not in result["all_public"]:
+                            result["all_public"].append(ip)
+                        break
             except Exception:
-                pass
+                continue
 
         return result
 
@@ -335,6 +331,79 @@ class AgentReporter:
                 logger.warning(f"Heartbeat failed: {e}")
             await asyncio.sleep(60)
 
+    async def _discovery_loop(self):
+        """周期性服务重新发现循环，每 5 分钟扫描新增/移除的服务。"""
+        while True:
+            await asyncio.sleep(300)  # 5 分钟
+            try:
+                newly_discovered = []
+
+                if self.config.discovery.docker:
+                    from vigilops_agent.discovery import discover_docker_services
+                    discovered = discover_docker_services(interval=self.config.discovery.interval)
+                    newly_discovered.extend(discovered)
+
+                if self.config.discovery.host_services:
+                    from vigilops_agent.discovery import discover_host_services
+                    host_discovered = discover_host_services(interval=self.config.discovery.interval)
+                    newly_discovered.extend(host_discovered)
+
+                # 找出尚未注册的新服务
+                known_names = {s.name for s in self.config.services}
+                new_services = [s for s in newly_discovered if s.name not in known_names]
+
+                if new_services:
+                    logger.info(f"Re-discovery found {len(new_services)} new service(s)")
+                    for svc in new_services:
+                        self.config.services.append(svc)
+
+                    # 注册新服务并启动健康检查
+                    client = await self._get_client()
+                    for svc in new_services:
+                        try:
+                            payload = {
+                                "name": svc.name,
+                                "type": svc.type,
+                                "target": svc.url or f"{svc.host}:{svc.port}",
+                                "host_id": self.host_id,
+                                "check_interval": svc.interval,
+                                "timeout": svc.timeout,
+                            }
+                            resp = await client.post("/api/v1/agent/services/register", json=payload)
+                            resp.raise_for_status()
+                            data = resp.json()
+                            self._service_ids[svc.name] = data["service_id"]
+                            logger.info(f"New service registered: {svc.name} -> id={data['service_id']}")
+                            # 启动该服务的健康检查循环
+                            asyncio.create_task(self._service_check_loop(svc))
+                        except Exception as e:
+                            logger.warning(f"Failed to register new service {svc.name}: {e}")
+
+                # 检测已消失的服务（可选上报 status=down）
+                current_names = {s.name for s in newly_discovered}
+                for svc in list(self.config.services):
+                    # 跳过手动配置的服务（仅检测自动发现的）
+                    if svc.name in self._manual_service_names:
+                        continue
+                    if svc.name not in current_names and svc.name in self._service_ids:
+                        logger.info(f"Service disappeared: {svc.name}")
+                        try:
+                            client = await self._get_client()
+                            payload = {
+                                "service_id": self._service_ids[svc.name],
+                                "status": "down",
+                                "response_time_ms": 0,
+                                "status_code": None,
+                                "error": "Service no longer detected by auto-discovery",
+                                "checked_at": datetime.now(timezone.utc).isoformat(),
+                            }
+                            await client.post("/api/v1/agent/services", json=payload)
+                        except Exception as e:
+                            logger.warning(f"Failed to report disappeared service {svc.name}: {e}")
+
+            except Exception as e:
+                logger.warning(f"Service re-discovery failed: {e}")
+
     async def _metrics_loop(self):
         """系统指标采集循环，按配置间隔周期执行。"""
         interval = self.config.metrics.interval
@@ -358,6 +427,9 @@ class AgentReporter:
                 await asyncio.sleep(wait)
         else:
             raise RuntimeError("Failed to register after 10 attempts")
+
+        # 记录手动配置的服务名（不参与自动移除检测）
+        self._manual_service_names = {s.name for s in self.config.services}
 
         # Docker 容器服务自动发现，与手动配置合并（去重）
         if self.config.discovery.docker:
@@ -403,6 +475,7 @@ class AgentReporter:
         tasks = [
             asyncio.create_task(self._heartbeat_loop()),
             asyncio.create_task(self._metrics_loop()),
+            asyncio.create_task(self._discovery_loop()),
         ]
         for svc in self.config.services:
             if svc.name in self._service_ids:
