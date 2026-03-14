@@ -455,6 +455,18 @@ class AgentReporter:
                 logger.info(f"Auto-discovered {len(host_discovered)} host services, "
                             f"total after merge: {len(self.config.services)}")
 
+        # Docker 数据库自动发现，与手动配置合并（去重）
+        if self.config.discovery.docker:
+            from vigilops_agent.discovery import discover_docker_databases
+            db_discovered = discover_docker_databases()
+            manual_db_names = {db.name for db in self.config.databases}
+            for db in db_discovered:
+                if db.name not in manual_db_names:
+                    self.config.databases.append(db)
+            if db_discovered:
+                logger.info(f"Auto-discovered {len(db_discovered)} Docker database(s), "
+                            f"total after merge: {len(self.config.databases)}")
+
         # 注册所有服务到服务端
         if self.config.services:
             await self.register_services()

@@ -14,7 +14,7 @@ import shutil
 import subprocess
 from typing import List, Optional, Set
 
-from vigilops_agent.config import LogSourceConfig, ServiceCheckConfig
+from vigilops_agent.config import DatabaseMonitorConfig, LogSourceConfig, ServiceCheckConfig
 
 logger = logging.getLogger(__name__)
 
@@ -306,6 +306,198 @@ def _is_http_service(process_name: str, port: int) -> bool:
         return True
 
     return False
+
+
+# Docker 镜像名 → 数据库类型映射
+_DB_IMAGE_MAP = {
+    "mysql": "mysql",
+    "mariadb": "mysql",
+    "postgres": "postgres",
+    "redis": "redis",
+    "mongo": "mongodb",
+    "oracle": "oracle",
+}
+
+# 数据库类型 → 常见环境变量中的密码字段名
+_DB_PASSWORD_ENVS = {
+    "mysql": ["MYSQL_ROOT_PASSWORD", "MYSQL_PASSWORD"],
+    "postgres": ["POSTGRES_PASSWORD"],
+    "redis": ["REDIS_PASSWORD", "REQUIREPASS"],
+    "mongodb": ["MONGO_INITDB_ROOT_PASSWORD"],
+    "oracle": ["ORACLE_PWD", "ORACLE_PASSWORD"],
+}
+
+# 数据库类型 → 用户名环境变量
+_DB_USER_ENVS = {
+    "mysql": ["MYSQL_USER"],
+    "postgres": ["POSTGRES_USER"],
+    "mongodb": ["MONGO_INITDB_ROOT_USERNAME"],
+}
+
+# 数据库类型 → 默认用户名
+_DB_DEFAULT_USER = {
+    "mysql": "root",
+    "postgres": "postgres",
+    "redis": "",
+    "mongodb": "admin",
+    "oracle": "system",
+}
+
+# 数据库类型 → 数据库名环境变量
+_DB_NAME_ENVS = {
+    "mysql": ["MYSQL_DATABASE"],
+    "postgres": ["POSTGRES_DB"],
+}
+
+# 数据库类型 → 容器内默认端口
+_DB_DEFAULT_PORTS = {
+    "mysql": 3306,
+    "postgres": 5432,
+    "redis": 6379,
+    "mongodb": 27017,
+    "oracle": 1521,
+}
+
+
+def discover_docker_databases(interval: int = 60) -> List[DatabaseMonitorConfig]:
+    """从运行中的 Docker 容器自动发现数据库实例。
+
+    通过容器镜像名识别数据库类型，从环境变量提取连接凭据，
+    从端口映射获取宿主机端口。
+
+    Args:
+        interval: 指标采集间隔（秒）。
+
+    Returns:
+        数据库监控配置列表。
+    """
+    if not shutil.which("docker"):
+        return []
+
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "--format", "{{json .}}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return []
+    except Exception as e:
+        logger.warning(f"Docker DB discovery error: {e}")
+        return []
+
+    databases = []
+    for line in result.stdout.strip().splitlines():
+        if not line.strip():
+            continue
+        try:
+            container = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        name = container.get("Names", "").strip()
+        image = container.get("Image", "").strip().lower()
+        ports_str = container.get("Ports", "")
+
+        if not name or not image:
+            continue
+
+        # 通过镜像名匹配数据库类型
+        db_type = None
+        for img_key, dtype in _DB_IMAGE_MAP.items():
+            if img_key in image.split(":")[0]:
+                db_type = dtype
+                break
+
+        if not db_type:
+            continue
+
+        # 提取宿主机映射端口
+        default_port = _DB_DEFAULT_PORTS.get(db_type, 0)
+        host_port = default_port  # 回退到默认端口
+        for mapping in ports_str.split(","):
+            mapping = mapping.strip()
+            if "->" not in mapping:
+                continue
+            try:
+                host_part, container_part = mapping.split("->")
+                container_port = int(container_part.split("/")[0])
+                if container_port == default_port and ":" in host_part:
+                    # 跳过 IPv6 映射
+                    if host_part.startswith("[::]:"):
+                        continue
+                    host_port = int(host_part.rsplit(":", 1)[1])
+                    break
+            except (ValueError, IndexError):
+                continue
+
+        # 通过 docker inspect 获取环境变量
+        env_vars = _get_container_env(name)
+        if env_vars is None:
+            continue
+
+        # 提取密码
+        password = ""
+        for env_key in _DB_PASSWORD_ENVS.get(db_type, []):
+            if env_key in env_vars:
+                password = env_vars[env_key]
+                break
+
+        # Redis 不需要密码即可监控基本指标，其他数据库没密码则跳过
+        if not password and db_type not in ("redis",):
+            logger.debug(f"Skipping {name}: no password found in container env")
+            continue
+
+        # 提取用户名
+        username = _DB_DEFAULT_USER.get(db_type, "")
+        for env_key in _DB_USER_ENVS.get(db_type, []):
+            if env_key in env_vars:
+                username = env_vars[env_key]
+                break
+
+        # 提取数据库名
+        database = ""
+        for env_key in _DB_NAME_ENVS.get(db_type, []):
+            if env_key in env_vars:
+                database = env_vars[env_key]
+                break
+
+        db_config = DatabaseMonitorConfig(
+            name=f"{name}",
+            type=db_type,
+            host="127.0.0.1",
+            port=host_port,
+            database=database,
+            username=username,
+            password=password,
+            interval=interval,
+        )
+        databases.append(db_config)
+        logger.info(f"Docker DB discovery: found {db_type} in container '{name}' on port {host_port}")
+
+    if databases:
+        logger.info(f"Docker DB discovery: found {len(databases)} database(s)")
+    return databases
+
+
+def _get_container_env(container_name: str) -> Optional[dict]:
+    """获取 Docker 容器的环境变量。"""
+    try:
+        result = subprocess.run(
+            ["docker", "inspect", "--format",
+             '{{range .Config.Env}}{{println .}}{{end}}', container_name],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            return None
+    except Exception:
+        return None
+
+    env = {}
+    for line in result.stdout.strip().splitlines():
+        if "=" in line:
+            key, _, value = line.partition("=")
+            env[key] = value
+    return env
 
 
 def discover_docker_log_sources() -> List[LogSourceConfig]:
