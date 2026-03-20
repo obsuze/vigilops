@@ -41,7 +41,7 @@ async def start_listener():
 
                 # 延迟导入避免循环依赖
                 from app.remediation.agent import RemediationAgent
-                from app.remediation.ai_client import RemediationAIClient
+                from app.remediation.ai_client import RemediationLLMClient
                 from app.remediation.command_executor import CommandExecutor
                 from app.remediation.models import RemediationAlert
 
@@ -76,7 +76,7 @@ async def start_listener():
                         labels={"service": service_name} if service_name else {},
                     )
 
-                    ai_client = RemediationAIClient()
+                    ai_client = RemediationLLMClient()
                     executor = CommandExecutor(dry_run=settings.agent_dry_run)
                     agent = RemediationAgent(ai_client=ai_client, executor=executor)
                     result = await agent.handle_alert(alert, db)

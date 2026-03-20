@@ -36,6 +36,10 @@ from app.models.dashboard_config import DashboardLayout, DashboardComponent
 from app.models.ai_feedback import AIFeedback, AIFeedbackSummary
 from app.models.topology_layout import TopologyLayout
 from app.models.suppression_rule import SuppressionRule
+from app.models.ops_session import OpsSession
+from app.models.ops_message import OpsMessage
+from app.models.menu_setting import MenuSetting
+from app.models.ai_operation_log import AIOperationLog
 
 # 导出所有模型类供外部模块使用 (Export all model classes for external modules)
 __all__ = [
@@ -47,4 +51,5 @@ __all__ = [
     "NginxUpstream", "DashboardLayout", "DashboardComponent", "AIFeedback", "AIFeedbackSummary",
     "TopologyLayout", "AlertGroup", "AlertDeduplication", "EscalationRule", "AlertEscalation",
     "OnCallGroup", "OnCallSchedule", "RemediationLog", "SuppressionRule",
+    "OpsSession", "OpsMessage", "MenuSetting", "AIOperationLog",
 ]

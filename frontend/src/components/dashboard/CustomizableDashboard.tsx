@@ -38,6 +38,7 @@ import type { AIInsight } from './AIInsightBanner';
 import type { ScoreDeduction } from './HealthScoreGauge';
 import { EmptyState, ErrorState, PageLoading } from '../StateComponents';
 import AgentInstallBanner from './AgentInstallBanner';
+import AILogAnalysisModal from './AILogAnalysisModal';
 
 // 导入类型和配置
 import type { DashboardConfig, DashboardWidget } from './types';
@@ -163,6 +164,7 @@ export default function CustomizableDashboard() {
   const [trends, setTrends] = useState<TrendPoint[]>([]);
   const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
   const [aiLoading, setAiLoading] = useState(true);
+  const [logAnalysisOpen, setLogAnalysisOpen] = useState(false);
 
   // 布局状态
   const [config, setConfig] = useState<DashboardConfig>(DEFAULT_CONFIG);
@@ -431,7 +433,7 @@ export default function CustomizableDashboard() {
     const fatalCount = logStats?.by_level.find(l => l.level === 'FATAL')?.count ?? 0;
     const errorCount = logStats?.by_level.find(l => l.level === 'ERROR')?.count ?? 0;
 
-    const handleAIAnalyze = () => navigate('/ai/analysis');
+    const handleAIAnalyze = () => setLogAnalysisOpen(true);
 
     switch (widget.component) {
       case 'MetricsCards':
@@ -557,7 +559,6 @@ export default function CustomizableDashboard() {
           <AIInsightBanner
             insight={aiInsight}
             loading={aiLoading}
-            onViewDetail={() => navigate('/ai/analysis')}
           />
         </div>
         <div style={{ width: 220, flexShrink: 0 }}>
@@ -596,6 +597,12 @@ export default function CustomizableDashboard() {
         onClose={() => setSettingsVisible(false)}
         onConfigChange={saveConfig}
         onResetLayout={resetLayout}
+      />
+
+      {/* AI 日志分析弹窗 */}
+      <AILogAnalysisModal
+        open={logAnalysisOpen}
+        onClose={() => setLogAnalysisOpen(false)}
       />
     </div>
   );

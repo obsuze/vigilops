@@ -24,6 +24,12 @@ from app.core.security import hash_password, verify_password, create_access_toke
 from app.models.user import User
 from app.schemas.auth import UserRegister, UserLogin, TokenResponse, TokenRefresh, UserResponse
 from app.services.audit import log_audit
+from app.services.auth_session import (
+    generate_session_id,
+    set_active_session,
+    validate_active_session,
+    clear_active_session,
+)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -110,8 +116,10 @@ async def register(data: UserRegister, request: Request, response: Response, db:
     await db.commit()
     await db.refresh(user)
 
-    access_token = create_access_token(str(user.id))
-    refresh_token = create_refresh_token(str(user.id))
+    session_id = generate_session_id()
+    await set_active_session(user.id, session_id)
+    access_token = create_access_token(str(user.id), session_id=session_id)
+    refresh_token = create_refresh_token(str(user.id), session_id=session_id)
 
     # P0-2 骨架：同步设置 httpOnly cookie（与 body 响应并行，前端逐步迁移）
     _set_auth_cookies(response, access_token, refresh_token)
@@ -155,8 +163,10 @@ async def login(data: UserLogin, request: Request, response: Response, db: Async
                     None, request.client.host if request.client else None)
     await db.commit()
 
-    access_token = create_access_token(str(user.id))
-    refresh_token = create_refresh_token(str(user.id))
+    session_id = generate_session_id()
+    await set_active_session(user.id, session_id)
+    access_token = create_access_token(str(user.id), session_id=session_id)
+    refresh_token = create_refresh_token(str(user.id), session_id=session_id)
 
     # P0-2 骨架：同步设置 httpOnly cookie（与 body 响应并行，前端逐步迁移）
     _set_auth_cookies(response, access_token, refresh_token)
@@ -197,13 +207,23 @@ async def refresh(request: Request, response: Response, data: TokenRefresh | Non
 
     # 从令牌中提取用户ID并验证用户状态 (Extract user ID and verify user status)
     user_id = payload.get("sub")
+    token_sid = payload.get("sid")
+    if not token_sid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired, please login again")
+
     result = await db.execute(select(User).where(User.id == int(user_id)))
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    access_token = create_access_token(str(user.id))
-    new_refresh_token = create_refresh_token(str(user.id))
+    is_valid_sid = await validate_active_session(user.id, token_sid)
+    if not is_valid_sid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Your account logged in elsewhere")
+
+    # 刷新时沿用同一个 SID，并顺延 Redis 会话 TTL
+    await set_active_session(user.id, token_sid)
+    access_token = create_access_token(str(user.id), session_id=token_sid)
+    new_refresh_token = create_refresh_token(str(user.id), session_id=token_sid)
 
     # P0-2 骨架：刷新后更新 cookie
     _set_auth_cookies(response, access_token, new_refresh_token)
@@ -212,7 +232,10 @@ async def refresh(request: Request, response: Response, data: TokenRefresh | Non
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(response: Response):
+async def logout(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+):
     """
     登出接口 (Logout)
     
@@ -222,6 +245,7 @@ async def logout(response: Response):
     Note：服务端无状态 JWT 无法真正撤销，建议后续引入 Redis 黑名单实现真正撤销。
     TODO P0-2 完整实现：在 Redis 维护 token 黑名单（jti claim）。
     """
+    await clear_active_session(current_user.id)
     response.delete_cookie(key=_COOKIE_ACCESS, path="/")
     response.delete_cookie(key=_COOKIE_REFRESH, path="/api/v1/auth/refresh")
 

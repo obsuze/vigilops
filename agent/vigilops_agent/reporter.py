@@ -96,6 +96,14 @@ class AgentReporter:
                                         self._do_update()
                                     elif msg.get("type") == "ping":
                                         ws.send(json.dumps({"type": "pong"}))
+                                    elif msg.get("type") == "exec_command":
+                                        # 在独立线程中执行命令，不阻塞 WebSocket 接收循环
+                                        threading.Thread(
+                                            target=self._execute_command,
+                                            args=(ws, msg),
+                                            daemon=True,
+                                            name=f"CmdExec-{msg.get('request_id', 'x')[:8]}",
+                                        ).start()
                                 except json.JSONDecodeError:
                                     pass
                         except websocket.WebSocketTimeoutException:
@@ -222,6 +230,143 @@ class AgentReporter:
 
         except Exception as e:
             logger.error(f"Update failed: {e}")
+
+    def _execute_command(self, ws, msg: dict):
+        """
+        执行后端下发的诊断命令，流式回传输出。
+
+        msg 格式：
+        {
+            "type": "exec_command",
+            "request_id": "uuid",
+            "command": "...",
+            "timeout": 120
+        }
+        """
+        import queue
+        import subprocess
+        import time as _time
+
+        request_id = msg.get("request_id", "")
+        command = msg.get("command", "")
+        timeout = msg.get("timeout", 120)
+
+        def _send(payload: dict):
+            try:
+                ws.send(json.dumps(payload))
+            except Exception as e:
+                logger.warning(f"Failed to send command output: {e}")
+
+        logger.info(f"Executing command [request_id={request_id}]: {command[:100]}")
+        start_time = _time.time()
+
+        try:
+            proc = subprocess.Popen(
+                command,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
+
+            output_q: queue.Queue[tuple[str, str]] = queue.Queue()
+            stdout_acc: list[str] = []
+            stderr_acc: list[str] = []
+
+            def _reader(stream_name: str, stream_obj):
+                try:
+                    for line in iter(stream_obj.readline, ""):
+                        output_q.put((stream_name, line))
+                finally:
+                    try:
+                        stream_obj.close()
+                    except Exception:
+                        pass
+
+            stdout_thread = threading.Thread(
+                target=_reader,
+                args=("stdout", proc.stdout),
+                daemon=True,
+                name=f"CmdStdout-{request_id[:8]}",
+            )
+            stderr_thread = threading.Thread(
+                target=_reader,
+                args=("stderr", proc.stderr),
+                daemon=True,
+                name=f"CmdStderr-{request_id[:8]}",
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+
+            timed_out = False
+            while True:
+                # 优先消费实时输出
+                try:
+                    stream_name, line = output_q.get(timeout=0.2)
+                    if stream_name == "stdout":
+                        stdout_acc.append(line)
+                        _send({"type": "command_output", "request_id": request_id,
+                               "stdout": line, "stderr": ""})
+                    else:
+                        stderr_acc.append(line)
+                        _send({"type": "command_output", "request_id": request_id,
+                               "stdout": "", "stderr": line})
+                except queue.Empty:
+                    pass
+
+                # 超时独立判定，不依赖是否有输出
+                if _time.time() - start_time > timeout:
+                    timed_out = True
+                    proc.kill()
+                    break
+
+                # 进程退出且队列已清空后结束
+                if proc.poll() is not None and output_q.empty():
+                    break
+
+            proc.wait()
+            stdout_thread.join(timeout=1.0)
+            stderr_thread.join(timeout=1.0)
+
+            # 最后再清空一次队列，避免尾部日志丢失
+            while True:
+                try:
+                    stream_name, line = output_q.get_nowait()
+                    if stream_name == "stdout":
+                        stdout_acc.append(line)
+                        _send({"type": "command_output", "request_id": request_id,
+                               "stdout": line, "stderr": ""})
+                    else:
+                        stderr_acc.append(line)
+                        _send({"type": "command_output", "request_id": request_id,
+                               "stdout": "", "stderr": line})
+                except queue.Empty:
+                    break
+
+            duration_ms = int((_time.time() - start_time) * 1000)
+            stderr_output = "".join(stderr_acc)
+            stdout_output = "".join(stdout_acc)
+
+            if timed_out:
+                if "command timed out" not in stderr_output:
+                    stderr_output = (stderr_output + "\ncommand timed out").strip()
+                _send({"type": "command_result", "request_id": request_id,
+                       "exit_code": -1, "stdout": stdout_output, "stderr": stderr_output,
+                       "duration_ms": duration_ms})
+                logger.warning(f"Command timeout [request_id={request_id}] after {duration_ms}ms")
+                return
+
+            _send({"type": "command_result", "request_id": request_id,
+                   "exit_code": proc.returncode,
+                   "stdout": stdout_output, "stderr": stderr_output,
+                   "duration_ms": duration_ms})
+            logger.info(f"Command done [request_id={request_id}] exit_code={proc.returncode} duration={duration_ms}ms")
+
+        except Exception as e:
+            logger.error(f"Command execution error [request_id={request_id}]: {e}")
+            _send({"type": "command_result", "request_id": request_id,
+                   "exit_code": -1, "stdout": "", "stderr": str(e), "duration_ms": 0})
 
     def _get_local_ip(self) -> str:
         """获取本机主要 IP 地址（保留兼容性）。"""

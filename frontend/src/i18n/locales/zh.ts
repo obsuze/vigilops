@@ -134,6 +134,7 @@ const zh = {
     remediation: '自动修复',
     sla: 'SLA 管理',
     aiAnalysis: 'AI 分析',
+    aiOperationLogs: 'AI 操作日志',
     reports: '运维报告',
     notificationChannels: '通知渠道',
     notificationTemplates: '通知模板',
@@ -153,6 +154,10 @@ const zh = {
     darkMode: '切换暗色模式',
     logout: '退出登录',
     language: '语言',
+    menuSettings: '菜单设置',
+    resetMenuSettings: '恢复默认菜单',
+    menuSettingsSaved: '菜单设置已保存',
+    menuSettingsSaveFailed: '菜单设置保存失败',
   },
 
   // ========== 仪表盘 ==========
@@ -215,17 +220,17 @@ const zh = {
     aiInsightTitle: 'AI 智能洞察',
     aiNoData: '暂无 AI 洞察数据',
     aiAnalyzing: 'AI 正在分析中，请稍后...',
-    viewFullAnalysis: '查看 AI 完整分析 →',
+    viewFullAnalysis: '查看洞察详情 →',
     scoreHealthy: '健康',
     scoreWarning: '警告',
     scoreDanger: '危险',
     // 日志统计增强
-    aiAnalyzeLog: '→ AI 分析',
+    aiAnalyzeLog: 'AI 分析日志',
     abnormalLogs: '异常日志',
     // 告警-日志联动
     alertsLogLinkedMsg: '注意：日志中存在 {{counts}} 异常',
     alertsLogLinkedDesc: '虽未触发规则告警，但建议立即进行 AI 排查',
-    viewAIAnalysis: '查看 AI 分析',
+    viewAIAnalysis: 'AI 分析日志',
     viewLogsPage: '前往日志页面',
     // 趋势图标题
     cpuTrendFull: 'CPU 使用率趋势',
@@ -439,6 +444,7 @@ const zh = {
     slaNoData: '无数据',
     checkHistoryTitle: '检查历史',
     slaNotConfigured: '未配置',
+    allServices: '全部服务',
   },
 
   // ========== 日志管理 ==========
@@ -665,6 +671,18 @@ const zh = {
     tryHealthStatus: '试试问：系统健康状况如何？',
     tryRecentAnomalies: '试试问：最近有什么异常？',
     tryCpuSpike: '试试问：服务器 CPU 为何飙升？',
+    insightDetail: 'AI 洞察详情',
+    type: '类型',
+    severity: '严重程度',
+    time: '时间',
+    rootCause: '根因',
+    suggestions: '建议措施',
+    patterns: '异常模式',
+    logAnalysisTitle: 'AI 日志异常分析',
+    analyzing: 'AI 正在分析异常日志，请稍候...',
+    analysisFailed: '分析失败',
+    noAbnormalLogs: '近期无异常日志',
+    analyzedLogs: '已分析 {{count}} 条异常日志',
   },
 
   // ========== 运维报告 ==========
@@ -879,6 +897,23 @@ const zh = {
     loadFailed: '获取审计日志失败',
   },
 
+  aiOperationLogs: {
+    title: 'AI 操作日志',
+    loadFailed: '加载 AI 操作日志失败',
+    time: '时间',
+    user: '执行用户',
+    host: '目标主机',
+    command: '执行命令',
+    reason: '执行原因',
+    status: '状态',
+    exitCode: '退出码',
+    duration: '耗时',
+    filterStatus: '状态筛选',
+    filterUser: '用户筛选',
+    statusSuccess: '成功',
+    statusFailed: '失败',
+  },
+
   // ========== 告警升级 ==========
   alertEscalation: {
     title: '告警升级管理',
@@ -1079,7 +1114,7 @@ const zh = {
     confirmClearDeps: '清空所有自定义依赖？',
     noDeps: '暂无依赖关系',
     autoLabel: '自动',
-    aiAnalyzeButton: '开始 AI 分析',
+    aiAnalyzeButton: '打开 AI 运维助手',
     aiAnalyzing: 'AI 分析中...',
     aiAnalyzingService: 'AI 正在分析服务关系...',
     applyAll: '全部应用 ({{count}} 条)',
@@ -1369,6 +1404,11 @@ const zh = {
     ignoreHost: '忽略此主机',
     unignoreService: '取消忽略',
     unignoreHost: '取消忽略',
+    suppressedServices: '已屏蔽服务',
+    unsuppress: '解除屏蔽',
+    confirmUnsuppress: '确认解除屏蔽？',
+    unsuppressSuccess: '已解除屏蔽',
+    unsuppressFailed: '解除屏蔽失败',
   },
 };
 

@@ -59,7 +59,7 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-def create_access_token(subject: str) -> str:
+def create_access_token(subject: str, session_id: str | None = None) -> str:
     """
     生成访问令牌（短期有效） (Generate access token with short expiry)
     
@@ -76,14 +76,13 @@ def create_access_token(subject: str) -> str:
         str: JWT 访问令牌字符串 (JWT access token string)
     """
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
-    return jwt.encode(
-        {"sub": subject, "exp": expire, "type": "access"}, 
-        settings.jwt_secret_key, 
-        algorithm=settings.jwt_algorithm
-    )
+    payload = {"sub": subject, "exp": expire, "type": "access"}
+    if session_id:
+        payload["sid"] = session_id
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
-def create_refresh_token(subject: str) -> str:
+def create_refresh_token(subject: str, session_id: str | None = None) -> str:
     """
     生成刷新令牌（长期有效） (Generate refresh token with long expiry)
     
@@ -101,11 +100,10 @@ def create_refresh_token(subject: str) -> str:
         str: JWT 刷新令牌字符串 (JWT refresh token string)
     """
     expire = datetime.now(timezone.utc) + timedelta(days=settings.jwt_refresh_token_expire_days)
-    return jwt.encode(
-        {"sub": subject, "exp": expire, "type": "refresh"}, 
-        settings.jwt_secret_key, 
-        algorithm=settings.jwt_algorithm
-    )
+    payload = {"sub": subject, "exp": expire, "type": "refresh"}
+    if session_id:
+        payload["sid"] = session_id
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
 def decode_token(token: str) -> dict | None:

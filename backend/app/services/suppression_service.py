@@ -338,3 +338,61 @@ class SuppressionService:
             suppress_ai_analysis=True,
             suppress_log_scan=True
         )
+
+    @staticmethod
+    async def get_suppressed_host_ids_for_logs(db: AsyncSession) -> set:
+        """获取日志统计/扫描应排除的 host_id 集合
+
+        包含两类：
+        1. 直接屏蔽主机（resource_type=host）
+        2. 通过服务屏蔽（resource_type=service），取该服务所属的 host_id
+
+        Args:
+            db: 异步数据库会话
+
+        Returns:
+            set: 应被排除的 host_id 集合
+        """
+        from app.models.service import Service
+
+        now = datetime.now(timezone.utc)
+        time_conditions = [
+            SuppressionRule.is_active == True,
+            or_(SuppressionRule.start_time == None, SuppressionRule.start_time <= now),
+            or_(SuppressionRule.end_time == None, SuppressionRule.end_time >= now),
+        ]
+
+        # 1. 直接屏蔽的主机
+        host_result = await db.execute(
+            select(SuppressionRule.resource_id).where(
+                and_(
+                    *time_conditions,
+                    SuppressionRule.resource_type == SuppressionService.RESOURCE_HOST,
+                    SuppressionRule.resource_id != None,
+                )
+            )
+        )
+        host_ids = set(row[0] for row in host_result.all())
+
+        # 2. 通过服务屏蔽 -> 查出对应 host_id
+        svc_result = await db.execute(
+            select(SuppressionRule.resource_id).where(
+                and_(
+                    *time_conditions,
+                    SuppressionRule.resource_type == SuppressionService.RESOURCE_SERVICE,
+                    SuppressionRule.resource_id != None,
+                )
+            )
+        )
+        suppressed_service_ids = [row[0] for row in svc_result.all()]
+
+        if suppressed_service_ids:
+            svc_host_result = await db.execute(
+                select(Service.host_id).where(
+                    Service.id.in_(suppressed_service_ids),
+                    Service.host_id != None,
+                )
+            )
+            host_ids.update(row[0] for row in svc_host_result.all())
+
+        return host_ids

@@ -35,7 +35,7 @@ from app.core.config import settings
 from app.core.database import async_session
 from app.models.log_entry import LogEntry
 from app.models.ai_insight import AIInsight
-from app.services.ai_engine import ai_engine
+from app.services.llm_client import analyze_logs_brief
 from app.services.suppression_service import SuppressionService
 
 logger = logging.getLogger(__name__)
@@ -163,7 +163,7 @@ async def scan_recent_logs(hours: int = 1) -> None:
 
             # 5. AI异常分析 (AI Anomaly Analysis)
             logger.info("Anomaly scan: analyzing %d log entries", len(logs_data))
-            analysis = await ai_engine.analyze_logs(logs_data)  # 调用AI引擎分析
+            analysis = await analyze_logs_brief(logs_data)  # 调用 LLM 分析
 
             # 6. 分析结果处理 (Analysis Result Processing)
             if not analysis.get("error"):

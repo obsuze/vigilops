@@ -134,6 +134,7 @@ const en = {
     remediation: 'Remediation',
     sla: 'SLA',
     aiAnalysis: 'AI Analysis',
+    aiOperationLogs: 'AI Operation Logs',
     reports: 'Reports',
     notificationChannels: 'Notification Channels',
     notificationTemplates: 'Notification Templates',
@@ -153,6 +154,10 @@ const en = {
     darkMode: 'Switch to Dark Mode',
     logout: 'Logout',
     language: 'Language',
+    menuSettings: 'Menu Settings',
+    resetMenuSettings: 'Reset Default Menu',
+    menuSettingsSaved: 'Menu settings saved',
+    menuSettingsSaveFailed: 'Failed to save menu settings',
   },
 
   // ========== Dashboard ==========
@@ -215,17 +220,17 @@ const en = {
     aiInsightTitle: 'AI Smart Insights',
     aiNoData: 'No AI insights yet',
     aiAnalyzing: 'AI is analyzing, please wait...',
-    viewFullAnalysis: 'View Full AI Analysis →',
+    viewFullAnalysis: 'View Insight Details →',
     scoreHealthy: 'Healthy',
     scoreWarning: 'Warning',
     scoreDanger: 'Danger',
     // Log stats enhancements
-    aiAnalyzeLog: '→ AI Analysis',
+    aiAnalyzeLog: 'AI Analyze Logs',
     abnormalLogs: 'Abnormal Logs',
     // Alert-log linkage
     alertsLogLinkedMsg: 'Notice: {{counts}} detected in logs',
     alertsLogLinkedDesc: 'No alert rules triggered, but immediate AI investigation is recommended',
-    viewAIAnalysis: 'View AI Analysis',
+    viewAIAnalysis: 'AI Analyze Logs',
     viewLogsPage: 'View Log Page',
     // Trend chart titles
     cpuTrendFull: 'CPU Usage Trend',
@@ -439,6 +444,7 @@ const en = {
     slaNoData: 'No Data',
     checkHistoryTitle: 'Check History',
     slaNotConfigured: 'Not Configured',
+    allServices: 'All Services',
   },
 
   // ========== Logs ==========
@@ -665,6 +671,18 @@ const en = {
     tryHealthStatus: 'Try: How is the system health?',
     tryRecentAnomalies: 'Try: Any recent anomalies?',
     tryCpuSpike: 'Try: Why is server CPU spiking?',
+    insightDetail: 'AI Insight Detail',
+    type: 'Type',
+    severity: 'Severity',
+    time: 'Time',
+    rootCause: 'Root Cause',
+    suggestions: 'Suggestions',
+    patterns: 'Anomaly Patterns',
+    logAnalysisTitle: 'AI Log Anomaly Analysis',
+    analyzing: 'AI is analyzing abnormal logs, please wait...',
+    analysisFailed: 'Analysis Failed',
+    noAbnormalLogs: 'No abnormal logs recently',
+    analyzedLogs: 'Analyzed {{count}} abnormal log entries',
   },
 
   // ========== Reports ==========
@@ -879,6 +897,23 @@ const en = {
     loadFailed: 'Failed to load audit logs',
   },
 
+  aiOperationLogs: {
+    title: 'AI Operation Logs',
+    loadFailed: 'Failed to load AI operation logs',
+    time: 'Time',
+    user: 'User',
+    host: 'Host',
+    command: 'Command',
+    reason: 'Reason',
+    status: 'Status',
+    exitCode: 'Exit Code',
+    duration: 'Duration',
+    filterStatus: 'Filter Status',
+    filterUser: 'Filter User',
+    statusSuccess: 'Success',
+    statusFailed: 'Failed',
+  },
+
   // ========== Alert Escalation ==========
   alertEscalation: {
     title: 'Alert Escalation',
@@ -1079,7 +1114,7 @@ const en = {
     confirmClearDeps: 'Clear all custom dependencies?',
     noDeps: 'No dependencies',
     autoLabel: 'Auto',
-    aiAnalyzeButton: 'Start AI Analysis',
+    aiAnalyzeButton: 'Open AI Ops Assistant',
     aiAnalyzing: 'AI Analyzing...',
     aiAnalyzingService: 'AI is analyzing service relationships...',
     applyAll: 'Apply All ({{count}})',
@@ -1369,6 +1404,11 @@ const en = {
     ignoreHost: 'Ignore this host',
     unignoreService: 'Unignore',
     unignoreHost: 'Unignore',
+    suppressedServices: 'Suppressed Services',
+    unsuppress: 'Unsuppress',
+    confirmUnsuppress: 'Confirm unsuppress?',
+    unsuppressSuccess: 'Suppression removed',
+    unsuppressFailed: 'Failed to remove suppression',
   },
 };
 

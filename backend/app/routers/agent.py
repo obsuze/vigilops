@@ -590,19 +590,9 @@ async def ingest_logs(
 async def _check_log_keyword_alerts(logs: list, db: AsyncSession):
     """
     日志关键字告警检查 (Log Keyword Alert Check)
-    
-    扫描日志内容，匹配关键字告警规则，自动创建告警记录。
-    
-    Args:
-        logs: 日志条目对象列表
-        db: 数据库会话对象
-    流程：
-        1. 查询所有启用的log_keyword类型告警规则
-        2. 遍历日志条目，检查message字段是否包含关键字
-        3. 支持按日志级别和服务名过滤匹配范围
-        4. 匹配成功时创建Alert记录，截取前200字符
     """
     from app.models.alert import AlertRule, Alert
+    from app.services.suppression_service import SuppressionService
 
     result = await db.execute(
         select(AlertRule).where(
@@ -614,7 +604,14 @@ async def _check_log_keyword_alerts(logs: list, db: AsyncSession):
     if not rules:
         return
 
+    # 获取被屏蔽的 host_id，跳过这些主机的日志告警
+    suppressed_host_ids = await SuppressionService.get_suppressed_host_ids_for_logs(db)
+
     for log_item in logs:
+        # 跳过被屏蔽主机的日志
+        if log_item.host_id and log_item.host_id in suppressed_host_ids:
+            continue
+
         msg = (log_item.message or "").lower()
         level = (log_item.level or "").upper()
         svc = log_item.service or ""
@@ -666,31 +663,32 @@ AGENT_WS_ONLINE_KEY = "agent_ws_online"
 async def _redis_pubsub_listener(host_id: int, websocket: WebSocket):
     """
     订阅 Redis channel，将收到的更新指令转发给本进程持有的 WebSocket。
+    同时监听 cmd_to_agent channel，将命令下发到 Agent。
     每个 WebSocket 连接对应一个独立的订阅协程。
     """
     redis = await get_redis()
-    channel = f"{AGENT_UPDATE_CHANNEL}{host_id}"
+    update_channel = f"{AGENT_UPDATE_CHANNEL}{host_id}"
+    cmd_channel = f"cmd_to_agent:{host_id}"
     pubsub = redis.pubsub()
-    await pubsub.subscribe(channel)
-    logger.info(f"Subscribed to Redis channel: {channel}")
+    await pubsub.subscribe(update_channel, cmd_channel)
+    logger.info(f"Subscribed to Redis channels: {update_channel}, {cmd_channel}")
     try:
         async for message in pubsub.listen():
             if message["type"] != "message":
                 continue
-            # 检查本进程是否还持有这个连接
             if host_id not in agent_ws_clients:
                 break
             try:
                 payload = json.loads(message["data"])
                 await websocket.send_json(payload)
-                logger.info(f"Forwarded update to host_id={host_id} via WebSocket")
+                logger.info(f"Forwarded message type={payload.get('type')} to host_id={host_id}")
             except Exception as e:
                 logger.warning(f"Failed to forward message to host_id={host_id}: {e}")
                 break
     except asyncio.CancelledError:
         pass
     finally:
-        await pubsub.unsubscribe(channel)
+        await pubsub.unsubscribe(update_channel, cmd_channel)
         await pubsub.close()
 
 
@@ -763,6 +761,9 @@ async def agent_websocket(
                 msg = json.loads(data)
                 if msg.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
+                elif msg.get("type") in ("command_output", "command_result"):
+                    # 将命令执行结果路由到对应的 OpsAgentLoop（通过 Redis Pub/Sub）
+                    await _route_command_result(host_id, msg)
             except json.JSONDecodeError:
                 pass
     except WebSocketDisconnect:
@@ -832,3 +833,59 @@ async def trigger_agent_update(
 # 添加安装脚本端点
 from .agent_install_endpoint import add_install_endpoint
 add_install_endpoint(router)
+
+
+async def _route_command_result(host_id: int, msg: dict):
+    """
+    将 Agent 回传的命令输出/结果通过 Redis Pub/Sub 路由到对应的 OpsAgentLoop。
+    同时通过 ops_ws channel 推送到前端 WebSocket。
+    """
+    request_id = msg.get("request_id")
+    if not request_id:
+        return
+
+    redis = await get_redis()
+    msg_type = msg.get("type")
+
+    if msg_type == "command_output":
+        # 推送流式输出到前端（通过 ops_ws channel，需要 session_id）
+        # 通过 request_id 查找 session_id（存储在 Redis 中）
+        session_id = await redis.get(f"cmd_req_session:{request_id}")
+        if session_id:
+            if isinstance(session_id, bytes):
+                session_id = session_id.decode()
+            from app.services.ops_agent_loop import OPS_WS_CHANNEL
+            await redis.publish(
+                f"{OPS_WS_CHANNEL}{session_id}",
+                json.dumps({
+                    "event": "command_output",
+                    "message_id": request_id,
+                    "stdout": msg.get("stdout", ""),
+                    "stderr": msg.get("stderr", ""),
+                }),
+            )
+
+    elif msg_type == "command_result":
+        # 查找 session_id
+        session_id = await redis.get(f"cmd_req_session:{request_id}")
+        if session_id:
+            if isinstance(session_id, bytes):
+                session_id = session_id.decode()
+            from app.services.ops_agent_loop import CMD_RESULT_CHANNEL, OPS_WS_CHANNEL
+            # 通知 OpsAgentLoop（_wait_command_result 正在监听此 channel）
+            await redis.publish(
+                f"{CMD_RESULT_CHANNEL}{session_id}",
+                json.dumps(msg),
+            )
+            # 同时推送到前端
+            await redis.publish(
+                f"{OPS_WS_CHANNEL}{session_id}",
+                json.dumps({
+                    "event": "command_result",
+                    "message_id": request_id,
+                    "exit_code": msg.get("exit_code", -1),
+                    "duration_ms": msg.get("duration_ms", 0),
+                }),
+            )
+            # 清理 Redis 中的映射
+            await redis.delete(f"cmd_req_session:{request_id}")
