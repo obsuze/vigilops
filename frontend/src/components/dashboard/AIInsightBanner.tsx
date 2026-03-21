@@ -29,7 +29,7 @@ interface AIInsightBannerProps {
   onViewDetail?: () => void;
 }
 
-export default function AIInsightBanner({ insight, loading = false }: AIInsightBannerProps) {
+export default function AIInsightBanner({ insight, loading = false, onViewDetail }: AIInsightBannerProps) {
   const { t } = useTranslation();
   const [detailOpen, setDetailOpen] = useState(false);
 
