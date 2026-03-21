@@ -7,7 +7,7 @@
 [![Stars](https://img.shields.io/github/stars/LinChuang2008/vigilops?style=for-the-badge&logo=github&color=gold)](https://github.com/LinChuang2008/vigilops)
 [![CI](https://img.shields.io/github/actions/workflow/status/LinChuang2008/vigilops/test.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/LinChuang2008/vigilops/actions/workflows/test.yml)
 [![Docker](https://img.shields.io/github/actions/workflow/status/LinChuang2008/vigilops/docker-publish.yml?branch=main&style=for-the-badge&label=Docker&logo=docker)](https://github.com/LinChuang2008/vigilops/actions/workflows/docker-publish.yml)
-[![Version](https://img.shields.io/badge/version-v0.9.1-blue?style=for-the-badge)](https://github.com/LinChuang2008/vigilops/releases)
+[![Version](https://img.shields.io/badge/version-v2026.03.18-blue?style=for-the-badge)](https://github.com/LinChuang2008/vigilops/releases)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge)](LICENSE)
 
 [Live Demo](https://demo.lchuangnet.com/login) | [Install](#quickstart) | [Docs](#documentation) | [中文文档](README.zh-CN.md)
@@ -27,7 +27,7 @@ You've tried **Grafana + Prometheus**. You know **Datadog**. They tell you *some
 VigilOps is the **first open-source AI platform** that doesn't just monitor — it **heals**:
 
 1. **AI Analyzes** — DeepSeek reads logs, metrics, topology to find the real cause
-2. **AI Decides** — Picks the right Runbook from 6 built-in auto-remediation scripts
+2. **AI Decides** — Picks the right Runbook from 13 built-in auto-remediation scripts
 3. **AI Fixes** — Executes the fix with safety checks and approval workflows
 4. **AI Learns** — Same problems get resolved faster next time
 
@@ -45,7 +45,7 @@ VigilOps is the **first open-source AI platform** that doesn't just monitor — 
 git clone https://github.com/LinChuang2008/vigilops.git && cd vigilops
 cp .env.example .env   # Add your DeepSeek API key
 docker compose up -d
-# Open http://localhost:3001 — first account becomes admin
+# Open http://localhost:3001 — first registered account becomes admin
 ```
 
 > On first startup, the backend auto-creates 37 tables, 5 alert rules, and 8 dashboard components.
@@ -57,8 +57,9 @@ docker compose up -d
 | Feature | VigilOps | Nightingale | Prom+Grafana | Datadog | Zabbix |
 |---------|:--------:|:-----------:|:------------:|:-------:|:------:|
 | AI Root Cause Analysis | Built-in | - | - | Enterprise | - |
-| Auto-Remediation | 6 Runbooks | - | - | Enterprise | - |
+| Auto-Remediation | 13 Runbooks | - | - | Enterprise | - |
 | MCP Integration | **First** | - | - | Early | - |
+| PromQL Queries | ✓ | - | Native | Enterprise | - |
 | Self-Hosted | Docker | K8s/Docker | Complex | SaaS | Yes |
 | Cost | **Free** | Free/Ent | Free | $$$ | Free/Ent |
 | Setup Time | **5 min** | 30 min | 2+ hrs | 5 min | 1+ hr |
@@ -80,7 +81,9 @@ docker compose up -d
   └──────────┘     └──────────────┘     └────────────────┘    └────────────┘
 ```
 
-**6 Built-in Runbooks**: `disk_cleanup` | `service_restart` | `memory_pressure` | `log_rotation` | `zombie_killer` | `connection_reset`
+**13 Built-in Runbooks**: `disk_cleanup` | `service_restart` | `memory_pressure` | `log_rotation` | `zombie_killer` | `connection_reset` | `cpu_high` | `docker_cleanup` | `network_diag` | `mysql_health` | `redis_health` | `nginx_fix` | `swap_pressure`
+
+**AI Runbook Generator**: Describe a scenario in natural language, and AI generates an executable Runbook with safety checks — via `/api/v1/ai/generate-runbook`.
 
 ---
 
@@ -106,12 +109,58 @@ Your AI assistant (Claude Code, Cursor) queries live production data via MCP:
 # Enable in backend/.env
 VIGILOPS_MCP_ENABLED=true
 VIGILOPS_MCP_PORT=8003
-VIGILOPS_MCP_TOKEN=your-secret-token
+VIGILOPS_MCP_API_KEY=your-secret-token
 ```
+
+> **Note**: Authentication via `VIGILOPS_MCP_API_KEY` is required in production.
 
 **5 MCP Tools**: `get_servers_health` | `get_alerts` | `search_logs` | `analyze_incident` | `get_topology`
 
 Ask your AI: *"Show all critical alerts on prod-server-01"* / *"Analyze last night's CPU spike"* / *"Search for OOM errors in the past 2 hours"*
+
+---
+
+## PromQL Query Support
+
+Query metrics using familiar PromQL syntax via API:
+
+```bash
+# Instant query
+GET /api/v1/promql/query?query=vigilops_host_cpu_percent
+
+# Range query
+GET /api/v1/promql/query_range?query=avg(vigilops_host_cpu_percent)&start=...&end=...&step=5m
+
+# Supported: rate(), avg(), sum(), min(), max(), count(), avg_over_time(), label matchers
+```
+
+Compatible with Prometheus HTTP API format for Grafana integration.
+
+---
+
+## Agent — Cross-Platform Monitoring
+
+The VigilOps Agent collects system metrics, discovers services, and monitors databases. It runs on **Linux**, **Windows/Windows Server**, and **macOS**.
+
+**Linux:**
+```bash
+pip install vigilops-agent
+vigilops-agent run -c /etc/vigilops/agent.yaml
+```
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\install-windows-agent.ps1 -ServerUrl "http://your-server:8001" -Token "your-token"
+.\scripts\install-windows-service.ps1   # Register as Windows Service
+```
+
+| Feature | Linux | Windows | macOS |
+|---------|:-----:|:-------:|:-----:|
+| CPU / Memory / Disk / Network | ✓ | ✓ | ✓ |
+| Docker Service Discovery | ✓ | ✓ | ✓ |
+| Host Service Discovery | ✓ (ss) | ✓ (netstat) | - |
+| Database Monitoring | ✓ | ✓ | ✓ |
+| Log Collection | ✓ | ✓ | ✓ |
 
 ---
 
@@ -142,7 +191,8 @@ See [docs/installation.md](docs/installation.md) for full guide.
 | Backend | Python 3.9+, FastAPI, SQLAlchemy, AsyncIO |
 | Database | PostgreSQL 15+, Redis 7+ |
 | AI | DeepSeek API (configurable LLM) |
-| Deploy | Docker Compose |
+| Agent | Python 3.9+, psutil — Linux / Windows / macOS |
+| Deploy | Docker Compose, Helm Chart (K8s) |
 
 ---
 

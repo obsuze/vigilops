@@ -34,12 +34,13 @@ const ThemedECharts = forwardRef<any, ThemedEChartsProps>(({ option, ...rest }, 
     // Deep merge dark overrides into option
     const darkOption = { ...option, backgroundColor: 'transparent' };
 
-    // Title
+    // Title + subtitle
     if (darkOption.title) {
       const t = Array.isArray(darkOption.title) ? darkOption.title : [darkOption.title];
       darkOption.title = t.map((item: any) => ({
         ...item,
         textStyle: { color: textColor, ...item?.textStyle },
+        subtextStyle: { color: textColor, ...item?.subtextStyle },
       }));
       if (!Array.isArray(option.title)) darkOption.title = darkOption.title[0];
     }
