@@ -17,9 +17,11 @@ export interface CustomRunbook {
   id: number;
   name: string;
   description: string;
+  match_alert_types: string[];
   trigger_keywords: string[];
   risk_level: string;
   steps: RunbookStep[];
+  verify_steps: RunbookStep[];
   safety_checks: string[];
   created_by: number;
   is_active: boolean;
@@ -34,6 +36,7 @@ export interface RunbookListItem {
   description: string;
   source: 'custom';
   risk_level: string;
+  match_alert_types?: string[];
   trigger_keywords?: string[];
   steps_count: number;
   is_active: boolean;
@@ -50,12 +53,19 @@ export interface DryRunStepResult {
   safety_message: string;
 }
 
+export interface DryRunCheckResult {
+  check: string;
+  passed: boolean;
+  message: string;
+}
+
 /** Dry-run 响应 */
 export interface DryRunResponse {
   runbook_name: string;
   risk_level: string;
   total_steps: number;
   steps: DryRunStepResult[];
+  preflight_checks: DryRunCheckResult[];
   all_safe: boolean;
 }
 
@@ -63,9 +73,11 @@ export interface DryRunResponse {
 export interface CreateRunbookRequest {
   name: string;
   description?: string;
+  match_alert_types?: string[];
   trigger_keywords?: string[];
   risk_level?: string;
   steps: RunbookStep[];
+  verify_steps?: RunbookStep[];
   safety_checks?: string[];
   is_active?: boolean;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Empty,
   Button,
   Card,
   Descriptions,
@@ -113,9 +114,11 @@ export default function RunbookManagement() {
     editorForm.setFieldsValue({
       risk_level: 'manual',
       is_active: true,
+      match_alert_types_text: '',
       trigger_keywords_text: '',
       safety_checks_text: '',
       steps: [{ name: '步骤 1', command: '', timeout_sec: 30, rollback_command: '' }],
+      verify_steps: [],
     });
     setEditorOpen(true);
   };
@@ -131,9 +134,16 @@ export default function RunbookManagement() {
         description: data.description,
         risk_level: data.risk_level,
         is_active: data.is_active,
+        match_alert_types_text: (data.match_alert_types || []).join(', '),
         trigger_keywords_text: (data.trigger_keywords || []).join(', '),
         safety_checks_text: (data.safety_checks || []).join('\n'),
         steps: (data.steps || []).map((step: any) => ({
+          name: step.name,
+          command: step.command,
+          timeout_sec: step.timeout_sec,
+          rollback_command: step.rollback_command || '',
+        })),
+        verify_steps: (data.verify_steps || []).map((step: any) => ({
           name: step.name,
           command: step.command,
           timeout_sec: step.timeout_sec,
@@ -164,9 +174,16 @@ export default function RunbookManagement() {
       description: values.description || '',
       risk_level: values.risk_level,
       is_active: !!values.is_active,
+      match_alert_types: toKeywordArray(values.match_alert_types_text),
       trigger_keywords: toKeywordArray(values.trigger_keywords_text),
       safety_checks: toKeywordArray(values.safety_checks_text),
       steps: (values.steps || []).map((step: any) => ({
+        name: step.name,
+        command: step.command,
+        timeout_sec: Number(step.timeout_sec || 30),
+        rollback_command: step.rollback_command || null,
+      })),
+      verify_steps: (values.verify_steps || []).map((step: any) => ({
         name: step.name,
         command: step.command,
         timeout_sec: Number(step.timeout_sec || 30),
@@ -231,9 +248,16 @@ export default function RunbookManagement() {
           description: res.data.runbook.description,
           risk_level: res.data.runbook.risk_level || values.risk_level || 'manual',
           is_active: true,
+          match_alert_types_text: (res.data.runbook.match_alert_types || []).join(', '),
           trigger_keywords_text: (res.data.runbook.trigger_keywords || []).join(', '),
           safety_checks_text: '',
           steps: (res.data.runbook.steps || []).map((step) => ({
+            name: step.name,
+            command: step.command,
+            timeout_sec: step.timeout_sec,
+            rollback_command: step.rollback_command || '',
+          })),
+          verify_steps: (res.data.runbook.verify_steps || []).map((step) => ({
             name: step.name,
             command: step.command,
             timeout_sec: step.timeout_sec,
@@ -301,7 +325,9 @@ export default function RunbookManagement() {
       title: '匹配',
       width: 220,
       render: (_: unknown, row: RunbookListItem) => {
-        const items = row.trigger_keywords || [];
+        const typeItems = row.match_alert_types || [];
+        const keywordItems = row.trigger_keywords || [];
+        const items = typeItems.length > 0 ? typeItems : keywordItems;
         return items.length ? (
           <Text style={{ fontSize: 12 }}>{items.slice(0, 4).join(', ')}{items.length > 4 ? ' ...' : ''}</Text>
         ) : '-';
@@ -367,13 +393,33 @@ export default function RunbookManagement() {
           )}
         </Space>
 
-        <Table
-          rowKey={(row) => `${row.id}`}
-          loading={loading}
-          dataSource={filteredRows}
-          columns={columns}
-          pagination={{ pageSize: 10 }}
-        />
+        {filteredRows.length === 0 && !loading ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <Space direction="vertical" size={4}>
+                <Text strong>当前还没有自定义 Runbook</Text>
+                <Text type="secondary">
+                  自动修复现在只会使用用户自己创建并启用的 Runbook。你可以先新建一个最小 Runbook，或者用 AI 生成后再调整。
+                </Text>
+              </Space>
+            }
+          >
+            <Space wrap>
+              {canEdit && <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建 Runbook</Button>}
+              {canEdit && <Button icon={<RobotOutlined />} onClick={() => { setAiResult(null); aiForm.resetFields(); aiForm.setFieldsValue({ risk_level: 'manual' }); setAiOpen(true); }}>AI 生成</Button>}
+              {canDelete && <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>导入自定义</Button>}
+            </Space>
+          </Empty>
+        ) : (
+          <Table
+            rowKey={(row) => `${row.id}`}
+            loading={loading}
+            dataSource={filteredRows}
+            columns={columns}
+            pagination={{ pageSize: 10 }}
+          />
+        )}
       </Card>
 
       <Drawer
@@ -389,6 +435,7 @@ export default function RunbookManagement() {
               <Descriptions.Item label="名称">{detail.name}</Descriptions.Item>
               <Descriptions.Item label="说明">{detail.description || '-'}</Descriptions.Item>
               <Descriptions.Item label="风险"><Tag color={riskColor(detail.risk_level)}>{detail.risk_level}</Tag></Descriptions.Item>
+              <Descriptions.Item label="匹配告警类型">{(detail.match_alert_types || []).join(', ') || '-'}</Descriptions.Item>
               <Descriptions.Item label="触发关键词">{(detail.trigger_keywords || []).join(', ') || '-'}</Descriptions.Item>
               <Descriptions.Item label="安全检查">{(detail.safety_checks || []).join(', ') || '-'}</Descriptions.Item>
               <Descriptions.Item label="状态">{detail.is_active ? '启用' : '停用'}</Descriptions.Item>
@@ -400,6 +447,18 @@ export default function RunbookManagement() {
               dataSource={detail.steps || []}
               columns={[
                 { title: '名称', dataIndex: 'name', width: 150 },
+                { title: '命令', dataIndex: 'command' },
+                { title: '超时', dataIndex: 'timeout_sec', width: 80 },
+                { title: '回滚', dataIndex: 'rollback_command', width: 220, render: (value: string) => value || '-' },
+              ]}
+            />
+            <Table
+              size="small"
+              pagination={false}
+              rowKey={(_, index) => `verify-${index}`}
+              dataSource={detail.verify_steps || []}
+              columns={[
+                { title: '验证步骤', dataIndex: 'name', width: 150 },
                 { title: '命令', dataIndex: 'command' },
                 { title: '超时', dataIndex: 'timeout_sec', width: 80 },
                 { title: '回滚', dataIndex: 'rollback_command', width: 220, render: (value: string) => value || '-' },
@@ -432,11 +491,14 @@ export default function RunbookManagement() {
               <Switch />
             </Form.Item>
           </Space>
+          <Form.Item label="匹配告警类型" name="match_alert_types_text" extra="用逗号或换行分隔，优先于关键词匹配">
+            <Input.TextArea rows={2} placeholder="service_down, disk_full" />
+          </Form.Item>
           <Form.Item label="触发关键词" name="trigger_keywords_text" extra="用逗号或换行分隔">
             <Input.TextArea rows={2} placeholder="nginx, upstream, 502" />
           </Form.Item>
-          <Form.Item label="安全检查" name="safety_checks_text" extra="用逗号或换行分隔">
-            <Input.TextArea rows={2} placeholder={'service must exist\ndisk usage > 80%'} />
+          <Form.Item label="安全检查" name="safety_checks_text" extra="支持 host_not_unknown、require_label:service、alert_type:service_down、severity:critical、label_equals:key=value">
+            <Input.TextArea rows={2} placeholder={'require_label:service\nlabel_equals:environment=prod'} />
           </Form.Item>
 
           <Divider>步骤</Divider>
@@ -469,6 +531,41 @@ export default function RunbookManagement() {
                 ))}
                 <Button type="dashed" block onClick={() => add({ name: `步骤 ${fields.length + 1}`, command: '', timeout_sec: 30, rollback_command: '' })}>
                   新增步骤
+                </Button>
+              </>
+            )}
+          </Form.List>
+
+          <Divider>验证步骤</Divider>
+          <Form.List name="verify_steps">
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map((field, index) => (
+                  <Card
+                    key={field.key}
+                    size="small"
+                    title={`验证步骤 ${index + 1}`}
+                    style={{ marginBottom: 12 }}
+                    extra={fields.length > 0 ? <Button danger size="small" onClick={() => remove(field.name)}>删除</Button> : null}
+                  >
+                    <Form.Item name={[field.name, 'name']} label="步骤名称" rules={[{ required: true }]}>
+                      <Input />
+                    </Form.Item>
+                    <Form.Item name={[field.name, 'command']} label="验证命令" rules={[{ required: true }]}>
+                      <Input.TextArea rows={3} />
+                    </Form.Item>
+                    <Space style={{ width: '100%' }} align="start">
+                      <Form.Item name={[field.name, 'timeout_sec']} label="超时（秒）" initialValue={30} rules={[{ required: true }]} style={{ minWidth: 160 }}>
+                        <InputNumber min={1} max={3600} style={{ width: '100%' }} />
+                      </Form.Item>
+                    </Space>
+                    <Form.Item name={[field.name, 'rollback_command']} label="回滚命令">
+                      <Input.TextArea rows={2} />
+                    </Form.Item>
+                  </Card>
+                ))}
+                <Button type="dashed" block onClick={() => add({ name: `验证步骤 ${fields.length + 1}`, command: '', timeout_sec: 30, rollback_command: '' })}>
+                  新增验证步骤
                 </Button>
               </>
             )}
@@ -545,6 +642,31 @@ export default function RunbookManagement() {
               </Tag>
               <Text type="secondary">共 {dryRunResult.total_steps} 步</Text>
             </Space>
+            {dryRunResult.preflight_checks.length > 0 && (
+              <>
+                <Text strong>执行前检查</Text>
+                <Table
+                  size="small"
+                  pagination={false}
+                  rowKey={(row) => row.check}
+                  dataSource={dryRunResult.preflight_checks}
+                  columns={[
+                    { title: '规则', dataIndex: 'check', width: 260 },
+                    {
+                      title: '结果',
+                      width: 120,
+                      render: (_: unknown, row: any) => (
+                        <Tag color={row.passed ? 'green' : 'red'}>
+                          {row.passed ? '通过' : '失败'}
+                        </Tag>
+                      ),
+                    },
+                    { title: '说明', dataIndex: 'message' },
+                  ]}
+                  style={{ marginBottom: 16, marginTop: 8 }}
+                />
+              </>
+            )}
             <Table
               size="small"
               pagination={false}
