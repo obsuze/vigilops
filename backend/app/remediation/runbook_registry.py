@@ -100,17 +100,27 @@ class RunbookRegistry:
             steps.append(RunbookStep(
                 description=step.get("name", ""),
                 command=step.get("command", ""),
+                rollback_command=step.get("rollback_command"),
+                timeout_seconds=step.get("timeout_sec", 30),
+            ))
+        verify_steps = []
+        for step in (custom_runbook.verify_steps or []):
+            verify_steps.append(RunbookStep(
+                description=step.get("name", ""),
+                command=step.get("command", ""),
+                rollback_command=step.get("rollback_command"),
                 timeout_seconds=step.get("timeout_sec", 30),
             ))
 
         definition = RunbookDefinition(
             name=custom_runbook.name,
             description=custom_runbook.description or "",
-            match_alert_types=[],
+            match_alert_types=custom_runbook.match_alert_types or [],
             match_keywords=custom_runbook.trigger_keywords or [],
+            safety_checks=custom_runbook.safety_checks or [],
             risk_level=risk_map.get(custom_runbook.risk_level, RiskLevel.CONFIRM),
             commands=steps,
-            verify_commands=[],
+            verify_commands=verify_steps,
             cooldown_seconds=300,
         )
         self.register(definition)

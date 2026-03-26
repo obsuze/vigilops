@@ -133,6 +133,7 @@ class RunbookStep(BaseModel):
     """
     description: str           # 步骤描述 (Step description)
     command: str              # 执行命令 (Command to execute)
+    rollback_command: Optional[str] = None  # 回滚命令 (Rollback command)
     timeout_seconds: int = 30 # 超时时间，默认 30 秒 (Timeout in seconds, default 30)
 
 
@@ -173,6 +174,7 @@ class RunbookDefinition(BaseModel):
     description: str                                    # Runbook 功能描述 (Runbook function description)
     match_alert_types: list[str]                       # 匹配的告警类型列表 (List of matching alert types)
     match_keywords: list[str] = Field(default_factory=list)  # 匹配的关键词列表 (List of matching keywords)
+    safety_checks: list[str] = Field(default_factory=list)   # 执行前预检规则 (Execution preflight checks)
     risk_level: RiskLevel = RiskLevel.CONFIRM          # 风险等级，默认需要确认 (Risk level, default requires confirmation)
     commands: list[RunbookStep]                        # 修复命令步骤列表 (List of remediation command steps)
     verify_commands: list[RunbookStep] = Field(default_factory=list)  # 验证命令步骤列表 (List of verification command steps)

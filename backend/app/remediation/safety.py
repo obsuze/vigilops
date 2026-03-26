@@ -41,7 +41,7 @@ import re
 import time
 from collections import defaultdict
 
-from .models import Diagnosis, RiskLevel, RunbookDefinition
+from .models import Diagnosis, RemediationAlert, RiskLevel, RunbookDefinition
 
 # === 危险命令禁止模式 (Dangerous Command Forbidden Patterns) ===
 # 
@@ -196,6 +196,15 @@ ALLOWED_COMMAND_PREFIXES: list[str] = [
     "last", "lastlog", "faillog",
 ]
 
+SUPPORTED_SAFETY_CHECK_EXAMPLES: list[str] = [
+    "host_not_unknown",
+    "require_label:service",
+    "require_label:service_name",
+    "alert_type:service_down",
+    "severity:critical",
+    "label_equals:environment=prod",
+]
+
 
 def check_command_safety(cmd: str) -> tuple[bool, str]:
     """命令安全性检查函数 (Command Safety Check Function)
@@ -254,6 +263,105 @@ def check_command_safety(cmd: str) -> tuple[bool, str]:
 
     # 所有检查通过，命令被认为是安全的 (All checks passed, command is considered safe)
     return True, "OK"
+
+
+def validate_safety_check_rule(rule: str) -> tuple[bool, str]:
+    """校验 safety_checks 规则语法。"""
+    normalized = (rule or "").strip()
+    if not normalized:
+        return False, "Empty safety check"
+
+    if normalized == "host_not_unknown":
+        return True, "OK"
+
+    if normalized.startswith("require_label:"):
+        label_name = normalized.split(":", 1)[1].strip()
+        if not label_name:
+            return False, "require_label must include a label name"
+        return True, "OK"
+
+    if normalized.startswith("alert_type:"):
+        alert_type = normalized.split(":", 1)[1].strip()
+        if not alert_type:
+            return False, "alert_type must include a value"
+        return True, "OK"
+
+    if normalized.startswith("severity:"):
+        severity = normalized.split(":", 1)[1].strip().lower()
+        if severity not in {"info", "warning", "critical"}:
+            return False, "severity must be one of info, warning, critical"
+        return True, "OK"
+
+    if normalized.startswith("label_equals:"):
+        expression = normalized.split(":", 1)[1].strip()
+        if "=" not in expression:
+            return False, "label_equals must use key=value format"
+        key, value = expression.split("=", 1)
+        if not key.strip() or not value.strip():
+            return False, "label_equals must include both key and value"
+        return True, "OK"
+
+    return False, (
+        "Unsupported safety check. Supported examples: "
+        + ", ".join(SUPPORTED_SAFETY_CHECK_EXAMPLES)
+    )
+
+
+def evaluate_safety_check_rule(rule: str, alert: RemediationAlert) -> tuple[bool, str]:
+    """执行单条 safety_check。"""
+    valid, reason = validate_safety_check_rule(rule)
+    if not valid:
+        return False, reason
+
+    normalized = rule.strip()
+    if normalized == "host_not_unknown":
+        passed = alert.host.strip().lower() != "unknown"
+        return passed, "Host must not be unknown"
+
+    if normalized.startswith("require_label:"):
+        label_name = normalized.split(":", 1)[1].strip()
+        passed = bool(alert.labels.get(label_name, "").strip())
+        return passed, f"Label '{label_name}' must exist"
+
+    if normalized.startswith("alert_type:"):
+        expected = normalized.split(":", 1)[1].strip()
+        passed = alert.alert_type == expected
+        return passed, f"Alert type must equal '{expected}'"
+
+    if normalized.startswith("severity:"):
+        expected = normalized.split(":", 1)[1].strip().lower()
+        passed = alert.severity.lower() == expected
+        return passed, f"Severity must equal '{expected}'"
+
+    if normalized.startswith("label_equals:"):
+        expression = normalized.split(":", 1)[1].strip()
+        key, expected = expression.split("=", 1)
+        key = key.strip()
+        expected = expected.strip()
+        actual = alert.labels.get(key, "")
+        passed = actual == expected
+        return passed, f"Label '{key}' must equal '{expected}'"
+
+    return False, "Unsupported safety check"
+
+
+def evaluate_safety_checks(
+    checks: list[str], alert: RemediationAlert
+) -> tuple[bool, list[dict[str, str | bool]]]:
+    """批量执行 safety_checks。"""
+    results: list[dict[str, str | bool]] = []
+    all_passed = True
+
+    for check in checks:
+        passed, message = evaluate_safety_check_rule(check, alert)
+        all_passed = all_passed and passed
+        results.append({
+            "check": check,
+            "passed": passed,
+            "message": message,
+        })
+
+    return all_passed, results
 
 
 class RateLimiter:

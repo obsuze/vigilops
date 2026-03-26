@@ -26,7 +26,12 @@ from app.schemas.custom_runbook import (
     DryRunResponse,
     DryRunStepResult,
 )
-from app.remediation.safety import check_command_safety
+from app.remediation.models import RemediationAlert
+from app.remediation.safety import (
+    check_command_safety,
+    evaluate_safety_checks,
+    validate_safety_check_rule,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +92,17 @@ def validate_all_steps(steps: list) -> None:
                 )
 
 
+def validate_safety_checks_rules(safety_checks: list[str]) -> None:
+    """验证 safety_checks 的规则语法。"""
+    for i, check in enumerate(safety_checks or []):
+        valid, msg = validate_safety_check_rule(check)
+        if not valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Safety check {i + 1}: {msg}",
+            )
+
+
 @router.get("", response_model=List[CustomRunbookResponse])
 async def list_custom_runbooks(
     skip: int = Query(0, ge=0),
@@ -121,6 +137,7 @@ async def list_all_runbooks(
             "description": cr.description,
             "source": "custom",
             "risk_level": cr.risk_level,
+            "match_alert_types": cr.match_alert_types,
             "trigger_keywords": cr.trigger_keywords,
             "steps_count": len(cr.steps) if cr.steps else 0,
             "is_active": cr.is_active,
@@ -162,13 +179,17 @@ async def create_custom_runbook(
 
     # 安全验证所有步骤命令
     validate_all_steps(data.steps)
+    validate_all_steps(data.verify_steps)
+    validate_safety_checks_rules(data.safety_checks)
 
     runbook = CustomRunbook(
         name=data.name,
         description=data.description,
+        match_alert_types=data.match_alert_types,
         trigger_keywords=data.trigger_keywords,
         risk_level=data.risk_level,
         steps=[s.model_dump() for s in data.steps],
+        verify_steps=[s.model_dump() for s in data.verify_steps],
         safety_checks=data.safety_checks,
         created_by=user.id,
         is_active=data.is_active,
@@ -209,6 +230,11 @@ async def update_custom_runbook(
     if "steps" in update_data and update_data["steps"]:
         validate_all_steps(data.steps)
         update_data["steps"] = [s.model_dump() for s in data.steps]
+    if "verify_steps" in update_data and update_data["verify_steps"] is not None:
+        validate_all_steps(data.verify_steps)
+        update_data["verify_steps"] = [s.model_dump() for s in data.verify_steps]
+    if "safety_checks" in update_data and update_data["safety_checks"] is not None:
+        validate_safety_checks_rules(update_data["safety_checks"])
 
     for key, value in update_data.items():
         setattr(runbook, key, value)
@@ -255,6 +281,17 @@ async def dry_run_runbook(
 
     step_results = []
     all_safe = True
+    preview_alert = RemediationAlert(
+        alert_id=0,
+        alert_type=str(data.variables.get("alert_type", "")),
+        severity=str(data.variables.get("severity", "warning")),
+        host=str(data.variables.get("host", "unknown")),
+        message=str(data.variables.get("message", "")),
+        labels={str(k): str(v) for k, v in data.variables.items()},
+    )
+    safety_passed, safety_results = evaluate_safety_checks(runbook.safety_checks or [], preview_alert)
+    if not safety_passed:
+        all_safe = False
 
     for step in runbook.steps:
         # 变量替换
@@ -281,11 +318,35 @@ async def dry_run_runbook(
             safety_message=msg,
         ))
 
+    for step in runbook.verify_steps or []:
+        resolved_cmd = step["command"]
+        for var_name, var_value in data.variables.items():
+            resolved_cmd = resolved_cmd.replace(f"{{{var_name}}}", str(var_value))
+
+        safe, msg = validate_command_safety(resolved_cmd)
+        if not safe:
+            all_safe = False
+
+        rollback = step.get("rollback_command")
+        if rollback:
+            for var_name, var_value in data.variables.items():
+                rollback = rollback.replace(f"{{{var_name}}}", str(var_value))
+
+        step_results.append(DryRunStepResult(
+            step_name=f"[VERIFY] {step['name']}",
+            resolved_command=resolved_cmd,
+            timeout_sec=step.get("timeout_sec", 30),
+            rollback_command=rollback,
+            safety_check_passed=safe,
+            safety_message=msg,
+        ))
+
     return DryRunResponse(
         runbook_name=runbook.name,
         risk_level=runbook.risk_level,
         total_steps=len(step_results),
         steps=step_results,
+        preflight_checks=safety_results,
         all_safe=all_safe,
     )
 
@@ -305,9 +366,11 @@ async def export_runbooks(
         export_data.append({
             "name": rb.name,
             "description": rb.description,
+            "match_alert_types": rb.match_alert_types,
             "trigger_keywords": rb.trigger_keywords,
             "risk_level": rb.risk_level,
             "steps": rb.steps,
+            "verify_steps": rb.verify_steps,
             "safety_checks": rb.safety_checks,
             "is_active": rb.is_active,
         })
@@ -370,16 +433,28 @@ async def import_runbooks(
                 safe, msg = validate_command_safety(cmd)
                 if not safe:
                     raise ValueError(f"Step {j + 1}: {msg}")
+            for j, step in enumerate(rb_data.get("verify_steps", [])):
+                cmd = step.get("command", "")
+                safe, msg = validate_command_safety(cmd)
+                if not safe:
+                    raise ValueError(f"Verify step {j + 1}: {msg}")
         except ValueError as e:
             errors.append(f"Item {i} ({name}): {e}")
+            continue
+        try:
+            validate_safety_checks_rules(rb_data.get("safety_checks", []))
+        except HTTPException as exc:
+            errors.append(f"Item {i} ({name}): {exc.detail}")
             continue
 
         runbook = CustomRunbook(
             name=name,
             description=rb_data.get("description", ""),
+            match_alert_types=rb_data.get("match_alert_types", []),
             trigger_keywords=rb_data.get("trigger_keywords", []),
             risk_level=rb_data.get("risk_level", "manual"),
             steps=steps,
+            verify_steps=rb_data.get("verify_steps", []),
             safety_checks=rb_data.get("safety_checks", []),
             created_by=user.id,
             is_active=rb_data.get("is_active", True),
