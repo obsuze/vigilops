@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -35,6 +36,8 @@ from app.core.redis import get_redis
 from app.models.alert import Alert
 from app.models.remediation_log import RemediationLog
 from app.remediation.agent import RemediationAgent
+from app.routers.alert_stream import DIAGNOSIS_CHANNEL
+from app.services.ai_engine import AIEngine
 
 logger = logging.getLogger("vigilops.webhooks")
 
@@ -80,6 +83,39 @@ async def _is_duplicate(external_id: str) -> bool:
         return False  # Redis 不可用时放行，宁可重复也不丢
 
 
+async def _run_diagnosis(incoming: IncomingAlert, alert_id: int | None):
+    """仅诊断模式: 调用 AI 引擎分析根因，通过 Redis 发布给 SSE 订阅者。"""
+    try:
+        engine = AIEngine()
+        alert_dict = {
+            "title": f"[Prometheus] {incoming.alertname}",
+            "service_name": incoming.labels.get("job", incoming.alertname),
+            "metric_name": incoming.alertname,
+            "severity": incoming.severity,
+            "instance": incoming.instance,
+            "annotations": incoming.annotations,
+            "labels": incoming.labels,
+        }
+        result = await engine.analyze_root_cause(alert_dict, [], [])
+
+        event = {
+            "alertname": incoming.alertname,
+            "instance": incoming.instance,
+            "severity": incoming.severity,
+            "summary": incoming.annotations.get("summary", ""),
+            "diagnosis": result,
+            "timestamp": incoming.starts_at.isoformat() if incoming.starts_at else None,
+            "alert_id": alert_id,
+        }
+        redis = await get_redis()
+        await redis.publish(
+            DIAGNOSIS_CHANNEL, json.dumps(event, ensure_ascii=False)
+        )
+        logger.info(f"Diagnosis published: alertname={incoming.alertname}")
+    except Exception as e:
+        logger.error(f"Diagnosis failed for {incoming.alertname}: {e}")
+
+
 async def _process_alert(
     incoming: IncomingAlert,
     db: AsyncSession,
@@ -88,15 +124,26 @@ async def _process_alert(
     # 1. 映射 Host
     host = await _prometheus_adapter.map_to_host(incoming, db)
     if host is None:
-        logger.warning(
-            f"Unmatched alert: alertname={incoming.alertname} instance={incoming.instance} — "
-            f"no matching Host found in VigilOps"
+        if settings.enable_remediation:
+            logger.warning(
+                f"Unmatched alert: alertname={incoming.alertname} instance={incoming.instance} — "
+                f"no matching Host found in VigilOps"
+            )
+            return {
+                "alertname": incoming.alertname,
+                "instance": incoming.instance,
+                "status": "skipped",
+                "reason": "host_not_found",
+            }
+        # 诊断模式: 无 Host 也继续运行 AI 诊断
+        logger.info(
+            f"Demo diagnosis: alertname={incoming.alertname} instance={incoming.instance} (no host match)"
         )
+        asyncio.create_task(_run_diagnosis(incoming, None))
         return {
             "alertname": incoming.alertname,
             "instance": incoming.instance,
-            "status": "skipped",
-            "reason": "host_not_found",
+            "status": "diagnosing",
         }
 
     # 2. 创建 VigilOps Alert 记录
@@ -112,35 +159,38 @@ async def _process_alert(
     db.add(alert_record)
     await db.flush()  # 获取 alert_record.id
 
-    # 3. 转换为 RemediationAlert
-    remediation_alert = _prometheus_adapter.to_remediation_alert(
-        incoming, host, alert_record.id
-    )
+    if settings.enable_remediation:
+        # 3. 转换为 RemediationAlert
+        remediation_alert = _prometheus_adapter.to_remediation_alert(
+            incoming, host, alert_record.id
+        )
 
-    # 4. 触发修复 (异步, 不等待完成)
-    async def _run_remediation():
-        try:
-            agent = RemediationAgent()
-            result = await agent.handle_alert(
-                alert=remediation_alert,
-                db=db,
-                triggered_by="alertmanager",
-            )
-            logger.info(
-                f"Remediation completed: alertname={incoming.alertname} "
-                f"host={host.hostname} success={result.success} "
-                f"runbook={result.runbook_name}"
-            )
-        except Exception as e:
-            logger.error(f"Remediation failed for {incoming.alertname}: {e}")
+        # 4. 触发修复 (异步, 不等待完成)
+        async def _run_remediation():
+            try:
+                agent = RemediationAgent()
+                result = await agent.handle_alert(
+                    alert=remediation_alert,
+                    db=db,
+                    triggered_by="alertmanager",
+                )
+                logger.info(
+                    f"Remediation completed: alertname={incoming.alertname} "
+                    f"host={host.hostname} success={result.success} "
+                    f"runbook={result.runbook_name}"
+                )
+            except Exception as e:
+                logger.error(f"Remediation failed for {incoming.alertname}: {e}")
 
-    asyncio.create_task(_run_remediation())
+        asyncio.create_task(_run_remediation())
+    else:
+        asyncio.create_task(_run_diagnosis(incoming, alert_record.id))
 
     return {
         "alertname": incoming.alertname,
         "instance": incoming.instance,
         "host": host.hostname,
-        "status": "processing",
+        "status": "processing" if settings.enable_remediation else "diagnosing",
         "alert_id": alert_record.id,
     }
 
@@ -199,7 +249,7 @@ async def receive_alertmanager_webhook(
 
     await db.commit()
 
-    processed = sum(1 for r in results if r.get("status") == "processing")
+    processed = sum(1 for r in results if r.get("status") in ("processing", "diagnosing"))
     skipped = len(results) - processed
     logger.info(
         f"AlertManager webhook: {len(incoming_alerts)} alerts received, "

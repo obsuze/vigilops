@@ -190,10 +190,35 @@ class FakePipeline:
         return results
 
 
+class FakePubSub:
+    """内存级 Redis PubSub 模拟。"""
+    def __init__(self):
+        self._channels: set[str] = set()
+        self._queue: asyncio.Queue = asyncio.Queue()
+
+    async def subscribe(self, *channels: str) -> None:
+        for ch in channels:
+            self._channels.add(ch)
+
+    async def unsubscribe(self, *channels: str) -> None:
+        for ch in channels:
+            self._channels.discard(ch)
+
+    async def get_message(self, ignore_subscribe_messages: bool = False, timeout: float = 0) -> dict | None:
+        try:
+            return await asyncio.wait_for(self._queue.get(), timeout=timeout)
+        except (asyncio.TimeoutError, asyncio.QueueEmpty):
+            return None
+
+    async def aclose(self) -> None:
+        self._channels.clear()
+
+
 class FakeRedis:
     """内存级 Redis 模拟，支持基本 get/set/delete/pipeline/sorted-set 操作。"""
     def __init__(self):
         self._store: dict[str, str] = {}
+        self._subscribers: list["FakePubSub"] = []
 
     def pipeline(self) -> FakePipeline:
         return FakePipeline(self._store)
@@ -226,8 +251,16 @@ class FakeRedis:
     async def expire(self, key: str, time: int) -> None:
         pass
 
-    async def publish(self, channel: str, message: str) -> None:
-        pass
+    async def publish(self, channel: str, message: str) -> int:
+        for sub in self._subscribers:
+            if channel in sub._channels:
+                await sub._queue.put({"type": "message", "channel": channel, "data": message.encode() if isinstance(message, str) else message})
+        return len(self._subscribers)
+
+    def pubsub(self) -> "FakePubSub":
+        ps = FakePubSub()
+        self._subscribers.append(ps)
+        return ps
 
     async def close(self) -> None:
         pass

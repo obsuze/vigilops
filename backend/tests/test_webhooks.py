@@ -240,3 +240,81 @@ class TestIPExtraction:
     def test_hostname_without_port(self):
         from app.alert_sources.prometheus import _extract_ip
         assert _extract_ip("web01.example.com") == "web01.example.com"
+
+
+# ── Remediation Gating Tests ────────────────────────────────────────
+
+class TestRemediationGating:
+    """ENABLE_REMEDIATION env var gates remediation vs diagnosis."""
+
+    @pytest.mark.asyncio
+    async def test_remediation_enabled_by_default(self):
+        """Default: enable_remediation=True."""
+        from app.core.config import settings
+        assert settings.enable_remediation is True
+
+    @pytest.mark.asyncio
+    async def test_diagnosis_mode_no_host_runs_diagnosis(self):
+        """When remediation disabled and no host match, diagnosis still runs."""
+        from app.routers.webhooks import _process_alert
+        from app.alert_sources.base import IncomingAlert
+        from datetime import datetime, timezone
+        from unittest.mock import patch, AsyncMock
+
+        incoming = IncomingAlert(
+            source="prometheus",
+            external_id="gate-test-1",
+            alertname="TestAlert",
+            instance="10.0.0.1:9090",
+            severity="warning",
+            status="firing",
+            labels={"job": "test"},
+            annotations={"summary": "Test alert"},
+            starts_at=datetime(2026, 3, 28, tzinfo=timezone.utc),
+        )
+
+        mock_db = AsyncMock()
+
+        with patch("app.routers.webhooks._prometheus_adapter") as mock_adapter, \
+             patch("app.routers.webhooks.settings") as mock_settings, \
+             patch("app.routers.webhooks._run_diagnosis") as mock_diagnosis, \
+             patch("app.routers.webhooks.asyncio") as mock_asyncio:
+            mock_adapter.map_to_host = AsyncMock(return_value=None)
+            mock_settings.enable_remediation = False
+
+            result = await _process_alert(incoming, mock_db)
+
+            assert result["status"] == "diagnosing"
+            mock_asyncio.create_task.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_remediation_enabled_no_host_skips(self):
+        """When remediation enabled and no host match, alert is skipped (existing behavior)."""
+        from app.routers.webhooks import _process_alert
+        from app.alert_sources.base import IncomingAlert
+        from datetime import datetime, timezone
+        from unittest.mock import patch, AsyncMock
+
+        incoming = IncomingAlert(
+            source="prometheus",
+            external_id="gate-test-2",
+            alertname="TestAlert",
+            instance="10.0.0.2:9090",
+            severity="warning",
+            status="firing",
+            labels={},
+            annotations={},
+            starts_at=datetime(2026, 3, 28, tzinfo=timezone.utc),
+        )
+
+        mock_db = AsyncMock()
+
+        with patch("app.routers.webhooks._prometheus_adapter") as mock_adapter, \
+             patch("app.routers.webhooks.settings") as mock_settings:
+            mock_adapter.map_to_host = AsyncMock(return_value=None)
+            mock_settings.enable_remediation = True
+
+            result = await _process_alert(incoming, mock_db)
+
+            assert result["status"] == "skipped"
+            assert result["reason"] == "host_not_found"
