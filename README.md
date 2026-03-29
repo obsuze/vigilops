@@ -10,7 +10,7 @@
 [![Version](https://img.shields.io/badge/version-v2026.03.29-blue?style=for-the-badge)](https://github.com/LinChuang2008/vigilops/releases)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge)](LICENSE)
 
-[Live Demo](https://demo.lchuangnet.com/demo) | [Install](#quickstart) | [Docs](#documentation) | [中文文档](README.zh-CN.md)
+[Live Demo](https://demo.lchuangnet.com/login) | [Install](#quickstart) | [Docs](#documentation) | [中文文档](README.zh-CN.md)
 
 <br/>
 
@@ -37,7 +37,7 @@ VigilOps is the **first open-source AI platform** that doesn't just monitor — 
 
 ## Quickstart
 
-**Try the AI Diagnosis Demo** (no install, no login): [demo.lchuangnet.com/demo](https://demo.lchuangnet.com/demo) — click "触发模拟告警" to see AI root cause analysis in action.
+**Try Online** (no install): [demo.lchuangnet.com](https://demo.lchuangnet.com/login) — `demo@vigilops.io` / `demo123`
 
 **Self-Host in 3 Steps:**
 
@@ -47,7 +47,7 @@ cp .env.example .env                    # Optional: add DeepSeek API key for liv
 docker compose up -d                    # Open http://localhost:3001
 ```
 
-> First registered account becomes admin. No API key needed for the Demo page — simulated alerts work out of the box.
+> First registered account becomes admin. On first startup, the backend auto-creates tables, alert rules, and dashboard components.
 
 ---
 
