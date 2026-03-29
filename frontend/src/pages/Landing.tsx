@@ -89,13 +89,13 @@ export default function Landing() {
         <Space align="center">
           <SafetyCertificateOutlined style={{ fontSize: 28, color: '#1677ff' }} />
           <Text strong style={{ fontSize: 20, color: isDark ? '#fff' : '#000' }}>VigilOps</Text>
-          <Tag color="blue" style={{ marginLeft: 8 }}>v2026.03.14-beta.1</Tag>
+          <Tag color="blue" style={{ marginLeft: 8 }}>v2026.03.29</Tag>
         </Space>
         <Space>
           <Button type="text" href="https://github.com/lchuangnet/vigilops" target="_blank" rel="noopener noreferrer">
             GitHub
           </Button>
-          <Button type="primary" onClick={() => navigate('/login')}>
+          <Button type="primary" onClick={() => navigate('/demo')}>
             {t('landing.signIn')}
           </Button>
         </Space>
@@ -138,7 +138,7 @@ export default function Landing() {
           {t('landing.heroDescription')}
         </Paragraph>
         <Space size="large">
-          <Button type="primary" size="large" icon={<ArrowRightOutlined />} onClick={() => navigate('/login')}>
+          <Button type="primary" size="large" icon={<ArrowRightOutlined />} onClick={() => navigate('/demo')}>
             {t('landing.getStarted')}
           </Button>
           <Button
@@ -279,7 +279,7 @@ export default function Landing() {
           {t('landing.ctaDescription')}
         </Paragraph>
         <Space size="large">
-          <Button type="primary" size="large" icon={<ArrowRightOutlined />} onClick={() => navigate('/login')}>
+          <Button type="primary" size="large" icon={<ArrowRightOutlined />} onClick={() => navigate('/demo')}>
             {t('landing.getStarted')}
           </Button>
           <Button
