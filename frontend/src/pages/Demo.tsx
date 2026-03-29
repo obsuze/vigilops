@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Card, Tag, Typography, Button, Alert, Space, Empty, Badge, message } from 'antd';
-import { CopyOutlined, LinkOutlined, DisconnectOutlined, LoadingOutlined } from '@ant-design/icons';
+import { CopyOutlined, LinkOutlined, DisconnectOutlined, LoadingOutlined, ThunderboltOutlined } from '@ant-design/icons';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -35,7 +35,7 @@ const CONFIG_SNIPPET = `# alertmanager.yml
 receivers:
   - name: 'vigilops'
     webhook_configs:
-      - url: '${window.location.protocol}//${window.location.hostname}:8001/api/v1/webhooks/alertmanager'
+      - url: '${window.location.origin}/api/v1/webhooks/alertmanager'
         send_resolved: true
         http_config:
           authorization:
@@ -48,10 +48,12 @@ route:
 export default function Demo() {
   const [events, setEvents] = useState<DiagnosisEvent[]>([]);
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
+  const [triggerLoading, setTriggerLoading] = useState(false);
+  const [triggerCooldown, setTriggerCooldown] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    const apiBase = `${window.location.protocol}//${window.location.hostname}:8001`;
+    const apiBase = window.location.origin;
     const sseUrl = `${apiBase}/api/v1/demo/alerts/stream`;
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
@@ -91,6 +93,24 @@ export default function Demo() {
     navigator.clipboard.writeText(CONFIG_SNIPPET).then(() => {
       message.success('已复制到剪贴板');
     });
+  };
+
+  const handleTriggerDemo = async () => {
+    setTriggerLoading(true);
+    try {
+      const res = await fetch(`${window.location.origin}/api/v1/demo/trigger`, { method: 'POST' });
+      if (res.status === 429) {
+        message.warning('请稍等几秒后再试');
+      } else if (!res.ok) {
+        message.error('触发失败，请检查后端服务');
+      }
+    } catch {
+      message.error('无法连接后端服务');
+    } finally {
+      setTriggerLoading(false);
+      setTriggerCooldown(true);
+      setTimeout(() => setTriggerCooldown(false), 5000);
+    }
   };
 
   const statusBadge = {
@@ -144,10 +164,21 @@ export default function Demo() {
           <Title level={4} style={{ margin: 0 }}>
             实时告警诊断
           </Title>
-          <Badge
-            status={statusBadge[status].status}
-            text={statusBadge[status].text}
-          />
+          <Space>
+            <Button
+              type="primary"
+              icon={<ThunderboltOutlined />}
+              onClick={handleTriggerDemo}
+              loading={triggerLoading}
+              disabled={triggerCooldown || status !== 'connected'}
+            >
+              {triggerCooldown ? '冷却中...' : '触发模拟告警'}
+            </Button>
+            <Badge
+              status={statusBadge[status].status}
+              text={statusBadge[status].text}
+            />
+          </Space>
         </div>
 
         {events.length === 0 ? (
