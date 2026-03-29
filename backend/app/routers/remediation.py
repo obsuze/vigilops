@@ -239,7 +239,7 @@ async def _execute_approved_remediation(log_id: int, alert_id: int) -> None:
     from app.remediation.command_executor import CommandExecutor
     from app.remediation.runbook_registry import RunbookRegistry
     from app.remediation.models import RemediationAlert, RunbookStep
-    from app.remediation.safety import check_command_safety
+    from app.remediation.safety import check_command_safety, evaluate_safety_checks
 
     _logger = logging.getLogger(__name__)
 
@@ -260,6 +260,7 @@ async def _execute_approved_remediation(log_id: int, alert_id: int) -> None:
                 return
 
             registry = RunbookRegistry()
+            await registry.load_from_db(db)
             runbook = registry.get(runbook_name)
             if not runbook:
                 log.status = "failed"
@@ -298,6 +299,15 @@ async def _execute_approved_remediation(log_id: int, alert_id: int) -> None:
                 labels=labels,
             )
 
+            checks_passed, check_results = evaluate_safety_checks(runbook.safety_checks, rem_alert)
+            if not checks_passed:
+                failed_checks = [str(r["check"]) for r in check_results if not r["passed"]]
+                log.status = "failed"
+                log.blocked_reason = f"Safety checks failed: {', '.join(failed_checks)}"
+                log.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+                return
+
             # 解析并执行命令
             log.status = "executing"
             log.started_at = datetime.now(timezone.utc)
@@ -331,6 +341,7 @@ async def _execute_approved_remediation(log_id: int, alert_id: int) -> None:
                 RunbookStep(
                     description=s.description,
                     command=_resolve(s.command),
+                    rollback_command=_resolve(s.rollback_command) if s.rollback_command else None,
                     timeout_seconds=s.timeout_seconds,
                 )
                 for s in runbook.commands
@@ -345,6 +356,7 @@ async def _execute_approved_remediation(log_id: int, alert_id: int) -> None:
                     RunbookStep(
                         description=s.description,
                         command=_resolve(s.command),
+                        rollback_command=_resolve(s.rollback_command) if s.rollback_command else None,
                         timeout_seconds=s.timeout_seconds,
                     )
                     for s in runbook.verify_commands
@@ -352,6 +364,26 @@ async def _execute_approved_remediation(log_id: int, alert_id: int) -> None:
                 verify_results = await executor.execute_steps(resolved_verify)
                 command_results.extend(verify_results)
                 verification_passed = all(r.exit_code == 0 for r in verify_results)
+
+            if any_failure or verification_passed is False:
+                successful_steps = []
+                for step, result in zip(resolved_steps, command_results):
+                    if result.exit_code == 0:
+                        successful_steps.append(step)
+                    else:
+                        break
+                rollback_steps = [
+                    RunbookStep(
+                        description=f"[ROLLBACK] {step.description}",
+                        command=step.rollback_command,
+                        timeout_seconds=step.timeout_seconds,
+                    )
+                    for step in reversed(successful_steps)
+                    if step.rollback_command
+                ]
+                if rollback_steps:
+                    rollback_results = await executor.execute_steps(rollback_steps)
+                    command_results.extend(rollback_results)
 
             success = not any_failure and (verification_passed is not False)
             log.status = "success" if success else "failed"

@@ -19,9 +19,11 @@ class CustomRunbookCreate(BaseModel):
     """创建自定义 Runbook"""
     name: str = Field(..., min_length=1, max_length=100)
     description: str = Field(default="", max_length=2000)
+    match_alert_types: List[str] = Field(default_factory=list)
     trigger_keywords: List[str] = Field(default_factory=list)
     risk_level: str = Field(default="manual")
     steps: List[RunbookStepSchema] = Field(..., min_length=1)
+    verify_steps: List[RunbookStepSchema] = Field(default_factory=list)
     safety_checks: List[str] = Field(default_factory=list)
     is_active: bool = True
 
@@ -38,14 +40,21 @@ class CustomRunbookCreate(BaseModel):
     def validate_keywords(cls, v: list) -> list:
         return [kw.strip() for kw in v if kw.strip()]
 
+    @field_validator("match_alert_types")
+    @classmethod
+    def validate_alert_types(cls, v: list) -> list:
+        return [alert_type.strip() for alert_type in v if alert_type.strip()]
+
 
 class CustomRunbookUpdate(BaseModel):
     """更新自定义 Runbook"""
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     description: Optional[str] = Field(default=None, max_length=2000)
+    match_alert_types: Optional[List[str]] = None
     trigger_keywords: Optional[List[str]] = None
     risk_level: Optional[str] = None
     steps: Optional[List[RunbookStepSchema]] = None
+    verify_steps: Optional[List[RunbookStepSchema]] = None
     safety_checks: Optional[List[str]] = None
     is_active: Optional[bool] = None
 
@@ -64,9 +73,11 @@ class CustomRunbookResponse(BaseModel):
     id: int
     name: str
     description: str
+    match_alert_types: List[str]
     trigger_keywords: List[str]
     risk_level: str
     steps: list
+    verify_steps: list
     safety_checks: List[str]
     created_by: int
     is_active: bool
@@ -77,7 +88,7 @@ class CustomRunbookResponse(BaseModel):
 
 
 class RunbookListResponse(BaseModel):
-    """Runbook 列表响应 (含内置+自定义)"""
+    """Runbook 列表响应。"""
     items: list
     total: int
 
@@ -97,10 +108,18 @@ class DryRunStepResult(BaseModel):
     safety_message: str = "OK"
 
 
+class DryRunCheckResult(BaseModel):
+    """Dry-run 预检结果。"""
+    check: str
+    passed: bool
+    message: str
+
+
 class DryRunResponse(BaseModel):
     """Dry-run 响应"""
     runbook_name: str
     risk_level: str
     total_steps: int
     steps: List[DryRunStepResult]
+    preflight_checks: List[DryRunCheckResult] = Field(default_factory=list)
     all_safe: bool

@@ -66,9 +66,20 @@ class GenerateRunbookStep(BaseModel):
     rollback_command: Optional[str] = None
 
 
+class GenerateRunbookData(BaseModel):
+    """AI 生成的 Runbook 数据。"""
+    name: str
+    description: str
+    match_alert_types: List[str] = []
+    trigger_keywords: List[str] = []
+    risk_level: str
+    steps: List[GenerateRunbookStep]
+    verify_steps: List[GenerateRunbookStep] = []
+
+
 class GenerateRunbookResponse(BaseModel):
     """AI 生成 Runbook 响应体。"""
     success: bool
-    runbook: Optional[Dict[str, Any]] = None
+    runbook: Optional[GenerateRunbookData] = None
     error: Optional[str] = None
     safety_warnings: List[str] = []

@@ -17,9 +17,11 @@ export interface CustomRunbook {
   id: number;
   name: string;
   description: string;
+  match_alert_types: string[];
   trigger_keywords: string[];
   risk_level: string;
   steps: RunbookStep[];
+  verify_steps: RunbookStep[];
   safety_checks: string[];
   created_by: number;
   is_active: boolean;
@@ -27,14 +29,13 @@ export interface CustomRunbook {
   updated_at: string;
 }
 
-/** 统一列表项 (内置 + 自定义) */
+/** Runbook 列表项 */
 export interface RunbookListItem {
-  id: number | null;
+  id: number;
   name: string;
   description: string;
-  source: 'builtin' | 'custom';
+  source: 'custom';
   risk_level: string;
-  match_keywords?: string[];
   match_alert_types?: string[];
   trigger_keywords?: string[];
   steps_count: number;
@@ -52,12 +53,19 @@ export interface DryRunStepResult {
   safety_message: string;
 }
 
+export interface DryRunCheckResult {
+  check: string;
+  passed: boolean;
+  message: string;
+}
+
 /** Dry-run 响应 */
 export interface DryRunResponse {
   runbook_name: string;
   risk_level: string;
   total_steps: number;
   steps: DryRunStepResult[];
+  preflight_checks: DryRunCheckResult[];
   all_safe: boolean;
 }
 
@@ -65,9 +73,11 @@ export interface DryRunResponse {
 export interface CreateRunbookRequest {
   name: string;
   description?: string;
+  match_alert_types?: string[];
   trigger_keywords?: string[];
   risk_level?: string;
   steps: RunbookStep[];
+  verify_steps?: RunbookStep[];
   safety_checks?: string[];
   is_active?: boolean;
 }
@@ -90,7 +100,7 @@ export interface GenerateRunbookResponse {
 }
 
 export const customRunbookService = {
-  /** 获取所有 Runbook (内置 + 自定义) */
+  /** 获取所有 Runbook */
   listAll: () =>
     api.get<{ items: RunbookListItem[]; total: number }>('/runbooks/custom/all'),
 

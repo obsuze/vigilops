@@ -47,7 +47,13 @@ from .models import (
     RunbookStep,
 )
 from .runbook_registry import RunbookRegistry
-from .safety import CircuitBreaker, RateLimiter, assess_risk, check_command_safety
+from .safety import (
+    CircuitBreaker,
+    RateLimiter,
+    assess_risk,
+    check_command_safety,
+    evaluate_safety_checks,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +197,7 @@ class RemediationAgent:
 
         # Step 2: 匹配 Runbook - 根据诊断结果选择合适的修复脚本
         # Step 2: Match Runbook - select appropriate remediation script based on diagnosis
+        await self.registry.load_from_db(db)
         runbook = self.registry.match(alert, diagnosis)
         if not runbook:
             result = RemediationResult(
@@ -251,6 +258,21 @@ class RemediationAgent:
                 escalated=True,
             )
             log.status = "pending_approval"
+            await self._update_log(db, log, result, alert)
+            return result
+
+        checks_passed, check_results = evaluate_safety_checks(runbook.safety_checks, alert)
+        if not checks_passed:
+            failed_checks = [str(r["check"]) for r in check_results if not r["passed"]]
+            result = RemediationResult(
+                alert_id=alert.alert_id,
+                success=False,
+                runbook_name=runbook.name,
+                diagnosis=diagnosis,
+                risk_level=risk,
+                blocked_reason=f"Safety checks failed: {', '.join(failed_checks)}",
+                escalated=True,
+            )
             await self._update_log(db, log, result, alert)
             return result
 
@@ -351,6 +373,7 @@ class RemediationAgent:
             RunbookStep(
                 description=s.description,
                 command=self._resolve_command(s.command, alert),  # 将 {host}、{service} 等替换为实际值
+                rollback_command=self._resolve_command(s.rollback_command, alert) if s.rollback_command else None,
                 timeout_seconds=s.timeout_seconds,
             )
             for s in runbook.commands
@@ -369,6 +392,7 @@ class RemediationAgent:
                 RunbookStep(
                     description=s.description,
                     command=self._resolve_command(s.command, alert),
+                    rollback_command=self._resolve_command(s.rollback_command, alert) if s.rollback_command else None,
                     timeout_seconds=s.timeout_seconds,
                 )
                 for s in runbook.verify_commands
@@ -376,6 +400,11 @@ class RemediationAgent:
             verify_results = await self.executor.execute_steps(resolved_verify)
             command_results.extend(verify_results)  # 合并到总结果中 (Merge into total results)
             verification_passed = all(r.exit_code == 0 for r in verify_results)
+
+        rollback_results: list[CommandResult] = []
+        if any_failure or verification_passed is False:
+            rollback_results = await self._rollback_runbook(resolved_steps, command_results)
+            command_results.extend(rollback_results)
 
         # 记录执行历史，用于限流控制 (Record execution history for rate limiting)
         self.rate_limiter.record_execution(alert.host, runbook.name)
@@ -398,6 +427,37 @@ class RemediationAgent:
             command_results=command_results,
             verification_passed=verification_passed,
         )
+
+    async def _rollback_runbook(
+        self,
+        resolved_steps: list[RunbookStep],
+        command_results: list[CommandResult],
+    ) -> list[CommandResult]:
+        """按已成功执行的主步骤逆序回滚。"""
+        successful_steps: list[RunbookStep] = []
+        for step, result in zip(resolved_steps, command_results):
+            if result.exit_code == 0:
+                successful_steps.append(step)
+            else:
+                break
+
+        rollback_steps: list[RunbookStep] = []
+        for step in reversed(successful_steps):
+            if not step.rollback_command:
+                continue
+            rollback_steps.append(
+                RunbookStep(
+                    description=f"[ROLLBACK] {step.description}",
+                    command=step.rollback_command,
+                    timeout_seconds=step.timeout_seconds,
+                )
+            )
+
+        if not rollback_steps:
+            return []
+
+        logger.warning("Executing rollback for %d step(s)", len(rollback_steps))
+        return await self.executor.execute_steps(rollback_steps)
 
     def _resolve_command(self, command: str, alert: RemediationAlert) -> str:
         """解析命令模板中的变量 (Resolve Variables in Command Template)

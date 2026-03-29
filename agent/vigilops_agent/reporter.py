@@ -25,7 +25,7 @@ import httpx
 import websocket
 
 from vigilops_agent import __version__
-from vigilops_agent.collector import collect_system_info, collect_metrics
+from vigilops_agent.collector import collect_system_info, collect_metrics, collect_agent_process_metrics
 from vigilops_agent.checker import run_check
 from vigilops_agent.config import AgentConfig, ServiceCheckConfig, DatabaseMonitorConfig
 from typing import Optional, List, Dict
@@ -42,6 +42,8 @@ class AgentReporter:
         self._client: Optional[httpx.AsyncClient] = None
         self._service_ids: Dict[str, int] = {}  # 服务名 -> 服务端分配的 service_id
         self._manual_service_names: set = set()  # 手动配置的服务名（不参与自动移除检测）
+        self._remote_db_tasks: Dict[int, asyncio.Task] = {}
+        self._remote_db_signatures: Dict[int, str] = {}
         # WebSocket 相关字段
         self._ws: Optional[websocket.WebSocket] = None
         self._ws_thread: Optional[threading.Thread] = None
@@ -217,11 +219,8 @@ class AgentReporter:
                     capture_output=True, text=True
                 )
                 if svc_check.returncode == 0 and "RUNNING" in svc_check.stdout:
-                    logger.info("Triggering agent service restart via sc...")
-                    subprocess.Popen(["sc", "stop", "VigilOpsAgent"])
-                    import time as _time
-                    _time.sleep(2)
-                    subprocess.Popen(["sc", "start", "VigilOpsAgent"])
+                    logger.info("Scheduling detached Windows service restart...")
+                    self._schedule_windows_service_restart()
                 else:
                     # 命令行模式：重启当前进程
                     logger.info("Not running as Windows service, restarting process...")
@@ -239,6 +238,44 @@ class AgentReporter:
 
         except Exception as e:
             logger.error(f"Update failed: {e}")
+
+    def _schedule_windows_service_restart(self):
+        """通过独立 PowerShell 进程延迟重启服务，避免服务进程自停自启的竞态。"""
+        ps_script = r"""
+Start-Sleep -Seconds 3
+sc.exe stop VigilOpsAgent | Out-Null
+$stopped = $false
+for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Seconds 1
+    $status = sc.exe query VigilOpsAgent | Out-String
+    if ($status -match 'STATE\s*:\s*1\s+STOPPED') {
+        $stopped = $true
+        break
+    }
+}
+if (-not $stopped) {
+    exit 1
+}
+Start-Sleep -Seconds 2
+sc.exe start VigilOpsAgent | Out-Null
+"""
+        creation_flags = 0
+        creation_flags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        creation_flags |= getattr(subprocess, "DETACHED_PROCESS", 0)
+        subprocess.Popen(
+            [
+                "powershell",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                ps_script,
+            ],
+            creationflags=creation_flags,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
     def _execute_command(self, ws, msg: dict):
         """
@@ -608,6 +645,7 @@ class AgentReporter:
         if not self.host_id:
             return
         metrics = collect_metrics()
+        metrics.update(collect_agent_process_metrics())
         metrics["host_id"] = self.host_id
         metrics["timestamp"] = datetime.now(timezone.utc).isoformat()
         client = await self._get_client()
@@ -695,6 +733,93 @@ class AgentReporter:
         resp.raise_for_status()
         logger.debug("DB metrics reported: %s", metrics.get("db_name"))
 
+    @staticmethod
+    def _build_db_target_signature(target: dict) -> str:
+        return json.dumps(
+            {
+                "name": target.get("name", ""),
+                "db_type": target.get("db_type", ""),
+                "db_host": target.get("db_host", ""),
+                "db_port": target.get("db_port", 0),
+                "db_name": target.get("db_name", ""),
+                "username": target.get("username", ""),
+                "password": target.get("password", ""),
+                "interval_sec": target.get("interval_sec", 60),
+                "connect_timeout_sec": target.get("connect_timeout_sec", 10),
+                "extra_config": target.get("extra_config", {}) or {},
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+
+    @staticmethod
+    def _build_db_config_from_target(target: dict) -> DatabaseMonitorConfig:
+        extra = target.get("extra_config", {}) or {}
+        return DatabaseMonitorConfig(
+            name=target.get("name", ""),
+            type=target.get("db_type", "postgres"),
+            host=target.get("db_host", "localhost"),
+            port=int(target.get("db_port", 5432)),
+            database=target.get("db_name", ""),
+            username=target.get("username", ""),
+            password=target.get("password", ""),
+            interval=int(target.get("interval_sec", 60)),
+            connect_timeout=int(target.get("connect_timeout_sec", 10)),
+            connection_mode=extra.get("connection_mode", "auto"),
+            container_name=extra.get("container_name", ""),
+            oracle_sid=extra.get("oracle_sid", ""),
+            oracle_home=extra.get("oracle_home", ""),
+            service_name=extra.get("service_name", ""),
+            redis_mode=extra.get("redis_mode", "single"),
+            sentinel_master=extra.get("sentinel_master", ""),
+            connection_threshold=float(extra.get("connection_threshold", 0.8)),
+        )
+
+    async def _sync_remote_db_targets(self):
+        """从服务端同步数据库监控目标，并动态启动/更新采集任务。"""
+        if not self.host_id:
+            return
+        try:
+            client = await self._get_client()
+            resp = await client.get("/api/v1/agent/db-targets", params={"host_id": self.host_id})
+            resp.raise_for_status()
+            payload = resp.json() or {}
+            items = payload.get("items", []) or []
+        except Exception as e:
+            logger.warning("Failed to sync remote DB targets: %s", e)
+            return
+
+        active_ids = set()
+        for target in items:
+            if not target.get("is_active", True):
+                continue
+            target_id = int(target.get("id"))
+            active_ids.add(target_id)
+            signature = self._build_db_target_signature(target)
+
+            # 配置未变化，保持当前任务
+            if self._remote_db_signatures.get(target_id) == signature and target_id in self._remote_db_tasks:
+                continue
+
+            # 配置变更时，先停掉旧任务再重启
+            old_task = self._remote_db_tasks.get(target_id)
+            if old_task:
+                old_task.cancel()
+
+            db_cfg = self._build_db_config_from_target(target)
+            new_task = asyncio.create_task(self._db_monitor_loop(db_cfg))
+            self._remote_db_tasks[target_id] = new_task
+            self._remote_db_signatures[target_id] = signature
+            logger.info("Remote DB target synced: id=%s name=%s", target_id, db_cfg.name)
+
+        # 清理已删除或停用的目标任务
+        for target_id in list(self._remote_db_tasks.keys()):
+            if target_id not in active_ids:
+                self._remote_db_tasks[target_id].cancel()
+                self._remote_db_tasks.pop(target_id, None)
+                self._remote_db_signatures.pop(target_id, None)
+                logger.info("Remote DB target removed: id=%s", target_id)
+
     async def _db_monitor_loop(self, db_config: DatabaseMonitorConfig):
         """数据库指标周期性采集循环。"""
         from vigilops_agent.db_collector import collect_db_metrics
@@ -703,6 +828,8 @@ class AgentReporter:
                 metrics = collect_db_metrics(db_config)
                 if metrics:
                     await self.report_db_metrics(metrics)
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
                 logger.warning("DB monitor failed for %s: %s", db_config.name, e)
             await asyncio.sleep(db_config.interval)
@@ -789,6 +916,7 @@ class AgentReporter:
         while True:
             await asyncio.sleep(60)
             try:
+                await self._sync_remote_db_targets()
                 newly_discovered = []
 
                 if self.config.discovery.docker:
@@ -952,16 +1080,25 @@ class AgentReporter:
                             f"total after merge: {len(self.config.services)}")
 
         # Docker 数据库自动发现，与手动配置合并（去重）
+        # 这里必须降级处理，不能因为某个发现能力缺失而导致整个 Agent 启动失败。
         if self.config.discovery.docker:
-            from vigilops_agent.discovery import discover_docker_databases
-            db_discovered = discover_docker_databases()
-            manual_db_names = {db.name for db in self.config.databases}
-            for db in db_discovered:
-                if db.name not in manual_db_names:
-                    self.config.databases.append(db)
-            if db_discovered:
-                logger.info(f"Auto-discovered {len(db_discovered)} Docker database(s), "
-                            f"total after merge: {len(self.config.databases)}")
+            try:
+                from vigilops_agent.discovery import discover_docker_databases
+                db_discovered = discover_docker_databases()
+                manual_db_names = {db.name for db in self.config.databases}
+                for db in db_discovered:
+                    if db.name not in manual_db_names:
+                        self.config.databases.append(db)
+                if db_discovered:
+                    logger.info(f"Auto-discovered {len(db_discovered)} Docker database(s), "
+                                f"total after merge: {len(self.config.databases)}")
+            except ImportError as e:
+                logger.warning("Docker database discovery is unavailable, skipping: %s", e)
+            except Exception as e:
+                logger.warning("Docker database discovery failed, skipping: %s", e)
+
+        # 首次同步平台下发的数据库监控目标（无需改本地配置文件）
+        await self._sync_remote_db_targets()
 
         # 注册所有服务到服务端
         if self.config.services:
@@ -986,9 +1123,6 @@ class AgentReporter:
             asyncio.create_task(self._discovery_loop()),
         ]
 
-        # 启动周期性服务重新发现（动态感知新服务）
-        if self.config.discovery.docker or self.config.discovery.host_services:
-            tasks.append(asyncio.create_task(self._discovery_loop()))
         for svc in self.config.services:
             if svc.name in self._service_ids:
                 tasks.append(asyncio.create_task(self._service_check_loop(svc)))
