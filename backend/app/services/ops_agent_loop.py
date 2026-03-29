@@ -629,17 +629,27 @@ class OpsAgentLoop:
             yield {"__type": "__result", "result": {"error": "命令确认超时，已自动取消", "action": "expired"}}
 
     async def _wait_command_result(self, request_id: str, timeout: int) -> dict:
-        """订阅 Redis channel 等待命令执行结果。"""
+        """订阅 Redis channel 等待命令执行结果，带硬超时防止永久阻塞。"""
         redis = await get_redis()
         channel = f"cmd_result:{self.session_id}"
         pubsub = redis.pubsub()
         await pubsub.subscribe(channel)
         try:
             deadline = asyncio.get_event_loop().time() + timeout
-            async for message in pubsub.listen():
-                if asyncio.get_event_loop().time() > deadline:
+            while True:
+                remaining = deadline - asyncio.get_event_loop().time()
+                if remaining <= 0:
+                    logger.warning(f"Command result timeout ({timeout}s) for request {request_id}")
                     break
-                if message["type"] != "message":
+                try:
+                    # get_message 带超时轮询，不会永久阻塞
+                    message = await asyncio.wait_for(
+                        pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0),
+                        timeout=min(remaining, 5.0),
+                    )
+                except asyncio.TimeoutError:
+                    continue
+                if message is None:
                     continue
                 try:
                     data = json.loads(message["data"])
@@ -647,7 +657,7 @@ class OpsAgentLoop:
                         return data
                 except Exception:
                     continue
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, asyncio.CancelledError):
             pass
         finally:
             await pubsub.unsubscribe(channel)
@@ -804,53 +814,87 @@ class OpsAgentLoop:
         text_buffer = ""
         tool_calls_buffer: dict[int, dict] = {}
 
+        stream_queue: asyncio.Queue = asyncio.Queue()
+        STREAM_TIMEOUT = 45
+
+        async def _do_stream():
+            """在独立 task 中运行流式读取，结果写入 queue。"""
+            nonlocal text_buffer
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, read=15.0), verify=False) as client:
+                    async with client.stream("POST", url, json=payload, headers=headers) as resp:
+                        if resp.status_code != 200:
+                            error_body = await resp.aread()
+                            logger.error(f"AI API error {resp.status_code}: {error_body.decode()[:500]}")
+                            await stream_queue.put({"type": "text_delta", "delta": f"\n[AI API 错误 {resp.status_code}，请重试]"})
+                            return
+                        async for line in resp.aiter_lines():
+                            if not line.startswith("data: "):
+                                continue
+                            data_str = line[6:]
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data_str)
+                            except json.JSONDecodeError:
+                                continue
+
+                            delta = chunk.get("choices", [{}])[0].get("delta", {})
+
+                            if delta.get("content"):
+                                text_buffer += delta["content"]
+                                await stream_queue.put({"type": "text_delta", "delta": delta["content"]})
+
+                            for tc in delta.get("tool_calls", []):
+                                idx = tc.get("index", 0)
+                                if idx not in tool_calls_buffer:
+                                    tool_calls_buffer[idx] = {
+                                        "id": tc.get("id", ""),
+                                        "type": "function",
+                                        "function": {"name": "", "arguments": ""},
+                                    }
+                                if tc.get("id"):
+                                    tool_calls_buffer[idx]["id"] = tc["id"]
+                                fn = tc.get("function", {})
+                                if fn.get("name"):
+                                    tool_calls_buffer[idx]["function"]["name"] += fn["name"]
+                                if fn.get("arguments"):
+                                    tool_calls_buffer[idx]["function"]["arguments"] += fn["arguments"]
+            except asyncio.CancelledError:
+                logger.info(f"AI stream cancelled for session {self.session_id}")
+            except Exception as e:
+                logger.error(f"AI API stream error in task: {e}")
+                await stream_queue.put({"type": "text_delta", "delta": f"\n\n[AI 调用失败：{e}]"})
+            finally:
+                await stream_queue.put(None)  # sentinel
+
+        stream_task = asyncio.create_task(_do_stream())
+        deadline = asyncio.get_event_loop().time() + STREAM_TIMEOUT
         try:
-            async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
-                async with client.stream("POST", url, json=payload, headers=headers) as resp:
-                    if resp.status_code != 200:
-                        error_body = await resp.aread()
-                        logger.error(f"AI API error {resp.status_code}: {error_body.decode()[:500]}")
-                        logger.error(f"Request context length: {len(self._context)} messages")
-                        yield {"type": "text_delta", "delta": f"\n[AI API 错误 {resp.status_code}，请重试]"}
-                        return
-                    async for line in resp.aiter_lines():
-                        if not line.startswith("data: "):
-                            continue
-                        data_str = line[6:]
-                        if data_str == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(data_str)
-                        except json.JSONDecodeError:
-                            continue
-
-                        delta = chunk.get("choices", [{}])[0].get("delta", {})
-
-                        # 文本内容
-                        if delta.get("content"):
-                            text_buffer += delta["content"]
-                            yield {"type": "text_delta", "delta": delta["content"]}
-
-                        # 工具调用
-                        for tc in delta.get("tool_calls", []):
-                            idx = tc.get("index", 0)
-                            if idx not in tool_calls_buffer:
-                                tool_calls_buffer[idx] = {
-                                    "id": tc.get("id", ""),
-                                    "type": "function",
-                                    "function": {"name": "", "arguments": ""},
-                                }
-                            if tc.get("id"):
-                                tool_calls_buffer[idx]["id"] = tc["id"]
-                            fn = tc.get("function", {})
-                            if fn.get("name"):
-                                tool_calls_buffer[idx]["function"]["name"] += fn["name"]
-                            if fn.get("arguments"):
-                                tool_calls_buffer[idx]["function"]["arguments"] += fn["arguments"]
-
+            while True:
+                remaining = deadline - asyncio.get_event_loop().time()
+                if remaining <= 0:
+                    stream_task.cancel()
+                    logger.warning(f"AI stream timeout ({STREAM_TIMEOUT}s) for session {self.session_id}")
+                    yield {"type": "text_delta", "delta": "\n\n[AI 响应超时，请重试]"}
+                    break
+                try:
+                    item = await asyncio.wait_for(stream_queue.get(), timeout=remaining)
+                except asyncio.TimeoutError:
+                    stream_task.cancel()
+                    logger.warning(f"AI stream timeout ({STREAM_TIMEOUT}s) for session {self.session_id}")
+                    yield {"type": "text_delta", "delta": "\n\n[AI 响应超时，请重试]"}
+                    break
+                if item is None:  # stream finished
+                    break
+                yield item
         except Exception as e:
+            stream_task.cancel()
             logger.error(f"AI API stream error: {e}")
             yield {"type": "text_delta", "delta": f"\n\n[AI 调用失败：{e}]"}
+        finally:
+            if not stream_task.done():
+                stream_task.cancel()
 
         if tool_calls_buffer:
             yield {"type": "tool_calls", "tool_calls": list(tool_calls_buffer.values())}

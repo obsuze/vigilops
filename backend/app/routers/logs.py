@@ -231,27 +231,16 @@ async def ws_logs(
 ):
     """
     WebSocket 实时日志流 (WebSocket Real-time Log Stream)
-    
-    建立 WebSocket 连接，向客户端实时推送新产生的日志条目。
-    支持客户端侧过滤条件，只推送符合条件的日志，减少网络流量。
-    
-    连接流程：
-    1. 客户端发起 WebSocket 连接
-    2. 服务器接受连接并订阅日志广播
-    3. 持续接收和过滤日志条目
-    4. 向客户端推送符合条件的日志
-    5. 连接断开时自动清理订阅
-    
-    Args:
-        websocket: WebSocket 连接对象
-        host_id: 可选的主机ID过滤条件
-        service: 可选的服务名过滤条件
-        level: 可选的日志级别过滤条件，支持多值逗号分隔
-        
-    Note:
-        此函数会一直运行直到客户端断开连接
+    需要通过 query 参数 token 或 cookie 传递 JWT 进行认证。
     """
-    await websocket.accept()  # 接受 WebSocket 连接请求
+    # 安全: WebSocket 连接认证
+    from app.core.ws_auth import validate_ws_token
+    payload = await validate_ws_token(websocket)
+    if payload is None:
+        await websocket.close(code=4401, reason="Authentication required")
+        return
+
+    await websocket.accept()  # 认证通过，接受 WebSocket 连接请求
     queue = log_broadcaster.subscribe()  # 订阅日志广播队列
     
     try:

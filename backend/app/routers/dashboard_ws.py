@@ -275,58 +275,16 @@ def _calc_health_score(
 async def dashboard_ws(websocket: WebSocket):
     """
     仪表盘 WebSocket 实时推送端点 (Dashboard WebSocket Real-time Push Endpoint)
-    
-    为前端仪表盘提供实时数据推送服务，保持仪表盘数据的及时性和准确性。
-    采用长连接模式，每30秒主动推送最新的系统监控数据。
-    
-    Connection Flow:
-        1. 客户端发起 WebSocket 连接请求
-        2. 服务器接受连接并记录日志
-        3. 进入数据推送循环：
-           - 收集最新的仪表盘数据
-           - 通过 WebSocket 发送 JSON 数据
-           - 等待30秒后重复
-        4. 连接断开时清理资源并记录日志
-        
-    Args:
-        websocket: WebSocket 连接对象
-        
-    Push Data Format:
-        JSON格式，包含以下字段：
-        - timestamp: 数据收集时间戳
-        - hosts: 主机状态统计
-        - services: 服务状态分布
-        - alerts: 告警活动统计
-        - recent_1h: 最近1小时活动统计
-        - avg_usage: 平均资源使用率
-        - health_score: 系统综合健康评分
-        
-    Error Handling:
-        - WebSocket 连接断开：正常退出循环
-        - 数据收集失败：记录警告日志，继续运行
-        - 其他异常：记录错误日志并断开连接
-        
-    Performance Considerations:
-        - 使用异步操作，不阻塞其他连接
-        - 独立的数据库会话，避免事务冲突
-        - 合理的推送间隔，平衡实时性和性能
-        
-    Client Usage:
-        JavaScript 前端代码示例：
-        ```javascript
-        const ws = new WebSocket('ws://localhost:8001/api/v1/ws/dashboard');
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            updateDashboard(data);
-        };
-        ```
-        
-    Security Notes:
-        - WebSocket 连接不需要显式认证（仪表盘为只读数据）
-        - 推送的数据为系统监控统计，不包含敏感信息
-        - 连接数限制由网关或负载均衡器处理
+    需要通过 query 参数 token 或 cookie 传递 JWT 进行认证。
     """
-    await websocket.accept()  # 接受 WebSocket 连接
+    # 安全: WebSocket 连接认证
+    from app.core.ws_auth import validate_ws_token
+    payload = await validate_ws_token(websocket)
+    if payload is None:
+        await websocket.close(code=4401, reason="Authentication required")
+        return
+
+    await websocket.accept()  # 认证通过，接受 WebSocket 连接
     logger.info("仪表盘 WebSocket 客户端已连接")
     
     try:
@@ -345,8 +303,9 @@ async def dashboard_ws(websocket: WebSocket):
                 )
 
             except asyncio.TimeoutError:
-                # 发送超时，客户端消费过慢，断开连接
+                # 发送超时，客户端消费过慢，显式关闭连接防止资源泄露
                 logger.warning("仪表盘 WebSocket 发送超时(5s)，断开慢消费者连接")
+                await websocket.close(code=4000, reason="Send timeout")
                 break
             except (WebSocketDisconnect, RuntimeError):
                 # 客户端主动断开连接或连接异常，正常退出循环
