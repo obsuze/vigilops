@@ -92,7 +92,7 @@ export default function Landing() {
           <Tag color="blue" style={{ marginLeft: 8 }}>v2026.03.29</Tag>
         </Space>
         <Space>
-          <Button type="text" href="https://github.com/lchuangnet/vigilops" target="_blank" rel="noopener noreferrer">
+          <Button type="text" href="https://github.com/LinChuang2008/vigilops/blob/main/README.md" target="_blank" rel="noopener noreferrer">
             GitHub
           </Button>
           <Button type="primary" onClick={() => navigate('/demo')}>
@@ -143,7 +143,7 @@ export default function Landing() {
           </Button>
           <Button
             size="large"
-            href="https://github.com/lchuangnet/vigilops"
+            href="https://github.com/LinChuang2008/vigilops/blob/main/README.md"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -284,7 +284,7 @@ export default function Landing() {
           </Button>
           <Button
             size="large"
-            href="https://github.com/lchuangnet/vigilops"
+            href="https://github.com/LinChuang2008/vigilops/blob/main/README.md"
             target="_blank"
             rel="noopener noreferrer"
           >
