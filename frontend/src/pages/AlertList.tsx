@@ -404,7 +404,7 @@ export default function AlertList() {
       title: t('alerts.alertInfo'),
       key: 'info',
       render: (_: unknown, record: Alert) => (
-        <div>
+        <div style={{ maxWidth: 'calc(100vw - 140px)' }}>
           <Tooltip title={getAlertTitle(record)}><div style={{ fontWeight: 500, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getAlertTitle(record)}</div></Tooltip>
           <Space size="small" wrap>
             <Tag color={severityColor[record.severity]}>{record.severity}</Tag>
