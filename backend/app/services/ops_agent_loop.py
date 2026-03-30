@@ -588,12 +588,51 @@ class OpsAgentLoop:
                 "count": len(logs),
             }
 
+    # 危险命令黑名单 — 阻止 AI 生成的可能造成不可逆损害的命令
+    _DANGEROUS_COMMAND_PATTERNS = [
+        r'\brm\s+(-[a-zA-Z]*f[a-zA-Z]*\s+)?/',       # rm -rf /
+        r'\bdd\s+if=',                                  # dd if=/dev/zero
+        r'\bmkfs\b',                                    # mkfs (format disk)
+        r'\bshutdown\b',                                # shutdown
+        r'\breboot\b',                                  # reboot
+        r'\binit\s+[06]\b',                             # init 0/6
+        r'\bhalt\b',                                    # halt
+        r'\bpoweroff\b',                                # poweroff
+        r'>\s*/dev/sd[a-z]',                            # write to raw disk
+        r'\bchmod\s+(-[a-zA-Z]*\s+)?777\s+/',          # chmod 777 /
+        r'\bchown\s+(-[a-zA-Z]*\s+)?root.*/',          # chown root /
+        r':\(\)\s*\{\s*:\|:\s*&\s*\}\s*;',             # fork bomb
+        r'\bcurl\b.*\|\s*(ba)?sh',                      # curl | bash
+        r'\bwget\b.*\|\s*(ba)?sh',                      # wget | bash
+    ]
+
+    @staticmethod
+    def _is_dangerous_command(command: str) -> str | None:
+        """检查命令是否匹配危险模式，返回匹配的模式描述或 None。"""
+        import re
+        for pattern in OpsAgentLoop._DANGEROUS_COMMAND_PATTERNS:
+            if re.search(pattern, command, re.IGNORECASE):
+                return pattern
+        return None
+
     async def _tool_execute_command(self, args: dict, msg_id: str):
         """发送命令确认请求（async generator），先 yield command_request 事件，再等待用户确认。"""
         command = args["command"]
         host_id = args["host_id"]
         timeout = args.get("timeout", 120)
         reason = args.get("reason", "")
+
+        # 安全检查：拦截危险命令
+        danger = self._is_dangerous_command(command)
+        if danger:
+            logger.warning("Blocked dangerous command: %s (pattern: %s)", command, danger)
+            yield {"event": "command_blocked", "message_id": msg_id,
+                   "command": command, "reason": f"命令被安全策略拦截（匹配危险模式）"}
+            yield {"__type": "__result", "result": {
+                "error": f"安全策略拦截：此命令匹配危险模式，已被自动阻止。请使用更安全的替代方案。",
+                "blocked_pattern": danger,
+            }}
+            return
 
         # 获取主机名
         async with AsyncSessionLocal() as db:
