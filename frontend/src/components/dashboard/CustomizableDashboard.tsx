@@ -487,7 +487,7 @@ export default function CustomizableDashboard() {
   };
 
   return (
-    <div ref={containerRef} style={{ width: '100%', overflow: 'hidden' }}>
+    <div ref={containerRef} style={{ width: '100%', overflowX: 'hidden' }}>
       {/* Agent 安装引导 Banner（当 hosts=0 时显示） */}
       {d.hosts.total === 0 && <AgentInstallBanner />}
       {/* 标题栏 */}
