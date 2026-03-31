@@ -83,10 +83,10 @@ from app.api.v1 import alert_deduplication
 async def lifespan(app: FastAPI):
     """
     应用生命周期管理器 (Application Lifecycle Manager)
-
+    
     管理 VigilOps 应用的完整生命周期，包括启动时的初始化和关闭时的清理。
     负责数据库表创建、内置数据初始化、后台任务启动和资源释放。
-
+    
     Manages the complete lifecycle of the VigilOps application, including initialization
     at startup and cleanup at shutdown. Responsible for database table creation,
     built-in data initialization, background task startup, and resource cleanup.
@@ -102,12 +102,18 @@ async def lifespan(app: FastAPI):
     from app.services.alert_seed import seed_builtin_rules
     from app.core.database import async_session
 
+    # 启动阶段：应用初始化 (Startup Phase: Application Initialization)
+    
+    # 自动创建数据库表结构 (Automatically create database table structure)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # 初始化内置告警规则（CPU、内存、磁盘等默认规则） (Initialize built-in alert rules)
     async with async_session() as session:
         await seed_builtin_rules(session)
-
+    
+    # 初始化默认数据保留策略设置 (Initialize default data retention policy settings)
+    # DataRetentionService 使用同步 .query()，需要同步 Session
     from app.services.data_retention import DataRetentionService
     from app.core.database import SessionLocal
     try:
@@ -130,42 +136,69 @@ async def lifespan(app: FastAPI):
         finally:
             sync_db.close()
     except Exception as e:
-        logger = logging.getLogger(__name__)
-        logger.warning(f"Failed to initialize data retention settings: {e}")
+        _init_logger = logging.getLogger(__name__)
+        _init_logger.warning(f"Failed to initialize data retention settings: {e}")
 
-    task = asyncio.create_task(offline_detector_loop())
-    alert_task = asyncio.create_task(alert_engine_loop())
+    # 启动后台定时任务 (Start background scheduled tasks)
+    logger = logging.getLogger("vigilops.tasks")
+
     retention_days = int(os.environ.get("LOG_RETENTION_DAYS", "7"))
-    log_cleanup_task = asyncio.create_task(log_cleanup_loop(retention_days))
     db_retention = int(os.environ.get("DB_METRIC_RETENTION_DAYS", "30"))
-    db_cleanup_task = asyncio.create_task(db_metric_cleanup_loop(db_retention))
-    data_retention_task_instance = asyncio.create_task(data_retention_task())
-    alert_dedup_cleanup_task = asyncio.create_task(alert_deduplication_cleanup_loop())
 
     from app.services.anomaly_scanner import anomaly_scanner_loop
-    anomaly_task = asyncio.create_task(anomaly_scanner_loop())
-
     from app.tasks.report_scheduler import report_scheduler_loop
-    report_task = asyncio.create_task(report_scheduler_loop())
 
-    remediation_task = None
+    # 注册所有后台任务及其工厂函数 (Register all background tasks with factory functions)
+    background_tasks: dict[str, asyncio.Task] = {}
+    task_factories: dict[str, callable] = {
+        "offline_detector": lambda: offline_detector_loop(),
+        "alert_engine": lambda: alert_engine_loop(),
+        "log_cleanup": lambda: log_cleanup_loop(retention_days),
+        "db_metric_cleanup": lambda: db_metric_cleanup_loop(db_retention),
+        "data_retention": lambda: data_retention_task(),
+        "alert_dedup_cleanup": lambda: alert_deduplication_cleanup_loop(),
+        "anomaly_scanner": lambda: anomaly_scanner_loop(),
+        "report_scheduler": lambda: report_scheduler_loop(),
+    }
+
+    # 自动修复监听任务（仅在配置启用时）
     if app_settings.agent_enabled:
         from app.tasks.remediation_listener import remediation_listener_loop
-        remediation_task = asyncio.create_task(remediation_listener_loop())
+        task_factories["remediation_listener"] = lambda: remediation_listener_loop()
 
+    # 启动所有任务
+    for name, factory in task_factories.items():
+        background_tasks[name] = asyncio.create_task(factory(), name=name)
+
+    # 后台任务监控：检测崩溃并自动重启 (Background task monitor: detect crashes and auto-restart)
+    async def _monitor_tasks():
+        while True:
+            await asyncio.sleep(30)
+            for name, task in list(background_tasks.items()):
+                if task.done():
+                    exc = task.exception() if not task.cancelled() else None
+                    if exc:
+                        logger.error("后台任务 [%s] 崩溃: %s，30s 后自动重启", name, exc)
+                    else:
+                        logger.warning("后台任务 [%s] 意外退出，30s 后自动重启", name)
+                    # 使用工厂函数重启任务
+                    if name in task_factories:
+                        background_tasks[name] = asyncio.create_task(
+                            task_factories[name](), name=name
+                        )
+                        logger.info("后台任务 [%s] 已重启", name)
+
+    monitor_task = asyncio.create_task(_monitor_tasks(), name="task_monitor")
+
+    # 应用运行阶段 (Application running phase)
     yield
 
-    task.cancel()
-    alert_task.cancel()
-    log_cleanup_task.cancel()
-    db_cleanup_task.cancel()
-    data_retention_task_instance.cancel()
-    alert_dedup_cleanup_task.cancel()
-    anomaly_task.cancel()
-    report_task.cancel()
-    if remediation_task is not None:
-        remediation_task.cancel()
+    # 关闭阶段：清理资源和取消任务 (Shutdown Phase: Cleanup resources and cancel tasks)
+    monitor_task.cancel()
+    for name, task in background_tasks.items():
+        task.cancel()
 
+    # 关闭连接池和资源 (Close connection pools and resources)
     await close_redis()
     await engine.dispose()
 
@@ -216,8 +249,6 @@ if is_development:
 else:
     _frontend_url = os.getenv("FRONTEND_URL", "").strip()
     allowed_origins = [
-        "http://localhost:3001",
-        "https://localhost:3001",
         "https://demo.lchuangnet.com",
         "https://lchuangnet.com",
         "https://www.lchuangnet.com",
