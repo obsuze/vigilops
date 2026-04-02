@@ -238,11 +238,16 @@ host:
   tags:
     - centos7
 
-collector:
-  interval: 30
+metrics:
+  interval: 15s
+
+discovery:
+  docker: true
+  process: true
+  host_services: true
 EOF
 
-chmod 600 "$CONFIG_FILE"
+chmod 644 "$CONFIG_FILE"
 
 echo ""
 
@@ -252,9 +257,7 @@ echo ""
 
 log_info "步骤 6: 创建 systemd 服务"
 
-if ! id -u vigilops > /dev/null 2>&1; then
-    useradd -r -s /sbin/nologin -d /var/lib/vigilops vigilops
-fi
+# Agent 以 root 运行（支持 AI 操作等需要高权限的功能）
 
 cat > /etc/systemd/system/vigilops-agent.service << EOF
 [Unit]
@@ -264,7 +267,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=vigilops
+User=root
 WorkingDirectory=$AGENT_INSTALL_DIR
 Environment="PATH=$VENV_DIR/bin:/usr/local/bin:/usr/bin:/bin"
 ExecStart=$VENV_DIR/bin/vigilops-agent run --config $CONFIG_FILE
